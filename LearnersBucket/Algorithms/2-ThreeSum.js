@@ -171,3 +171,27 @@ console.log("printAllTriplets");
 console.log(printAllTriplets(arr, sum));
 console.log(printAllTriplets(arr, 13));
 console.log(printAllTriplets(arr, 7));
+
+// Recursion explanation:
+// All triplets that get checked
+// For [1,2,3,4,5,6], the recursion explores:
+// 6,5,4
+// 6,5,3
+// 6,5,2
+// 6,5,1
+// 6,4,3
+// 6,4,2
+// 6,4,1
+// 6,3,2
+// 6,3,1
+// 6,2,1
+// 5,4,3
+// 5,4,2
+// 5,4,1
+// 5,3,2
+// 5,3,1
+// 5,2,1
+// 4,3,2
+// 4,3,1
+// 4,2,1
+// 3,2,1
