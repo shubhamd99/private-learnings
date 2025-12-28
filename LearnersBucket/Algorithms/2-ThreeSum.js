@@ -137,7 +137,7 @@ console.log(threeSumWithHashing(arr, 7)); // false
 // First, sort the array in ascending order so that we don't repeat the combination
 // and then for each element in the array we check if triplets exists by adding the current element and pair from the subarray
 // This solution uses the Sorting + Two-Pointer technique (commonly called the 3Sum Two-Pointer approach).
-// Time complexity: O(n ^ 2). Space complexity: O(1).
+// Time complexity: O(n ^ 2) - 2 nested loops. Space complexity: O(1).
 const printAllTriplets = (arr, sum) => {
   // increasing order
   arr.sort((a, b) => a - b);

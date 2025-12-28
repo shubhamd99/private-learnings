@@ -5,6 +5,7 @@
 // Then for each pair calculate the remaining target by substracting the sum of the pair from the given target and check if there exists a quadruplets by finding the pair with remaining target in the subarray.
 // 2 sum problem logic can be used to find the pair in a subarray with given sum in linear time.
 
+// Time complexity: O((logn) + (n ^ 3)) = O(n ^ 3) - 3 nested loops. Space complexity: O(1).
 const quadruplets = (arr, sum) => {
   // increasing order
   arr.sort((a, b) => a - b);
