@@ -98,6 +98,8 @@ console.log(threeSum2(arr, arr.length, 7, 0)); // false
 // Then we consider all the pair in the array and check if the map has the remaining sum or not
 // If the index of the remaining sum is not overlapping with the pair indexes then triplets exists thus return true, false otherwise.
 // Time complexity: O(n + n ^ 2) = O(n ^ 2). Space complexity: O(n).
+// a + b + c = target
+// ⇒ c = target − (a + b)
 const threeSumWithHashing = (arr, sum) => {
   const map = new Map();
 
