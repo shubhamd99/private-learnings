@@ -102,3 +102,29 @@ console.log(baseConverter(1021313, 16));
 // | 5  | 1     | 1      | 2     |
 // | 2  | 0     | 0      | 1     |
 // | 1  | 1     | 1      | 0     |
+
+// Brute force method to convert decimal to binary, octal or hexadecimal
+// Time Complexity: Arithmetic operation like n % b and n / b takes O(1) time
+// and we are reducing n by removing one digit after each operation so it takes O(log(n))
+// where n is the no of digits in input number.
+// Space Complexity: We are storing the digits in single variable so space complexity is O(1).
+function baseConverter2(n, b) {
+  let rem;
+  let convertedString = "";
+  const digits = "0123456789ABCDEF";
+
+  while (n > 0) {
+    rem = Math.floor(n % b);
+    convertedString = digits[rem] + convertedString;
+    n = Math.floor(n / b);
+  }
+
+  return convertedString;
+}
+
+// base 2 → binary
+// base 8 → octal
+// base 16 → hexadecimal
+console.log(baseConverter2(1021313, 2));
+console.log(baseConverter2(1021313, 8));
+console.log(baseConverter2(1021313, 16));
