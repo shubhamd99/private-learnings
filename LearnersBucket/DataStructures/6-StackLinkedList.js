@@ -18,6 +18,10 @@ class Node {
   }
 }
 
+// Array push/pop works at the end because the index is known,
+// but in a singly linked list only the head is directly accessible,
+// so stack operations are done at the head to maintain O(1) complexity.
+
 class StackUsingLL {
   constructor() {
     // To keep track of the size
