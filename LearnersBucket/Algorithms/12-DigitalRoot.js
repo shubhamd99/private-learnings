@@ -17,6 +17,11 @@
 // If the sum becomes single digit then we will return it.
 // Else we will call the same function to calculate the sum again.
 
+// Time complexity: O(n ^ 2) where n is the no of digits.
+// We are going to extract all the digits and sum them. After reducing if the number is not single digit then we repeat the step again.
+// So it is n * (n - 1) * (n - 2) = O(n ^ 2) where n is the no of digits in the number.
+// Space complexity: O(n). Our space complexity is determined by recursion depth.
+// So suppose if the number is reducing by 1 digit in each then Space complexity is O(n) where n is the no of digits in the number
 let digitalRoot = (n) => {
   // calculate the sum of all the digits
   let sum = 0;
@@ -30,7 +35,7 @@ let digitalRoot = (n) => {
   while (parseInt(n) > 0) {
     let temp = n % 10; // last digit
     sum = sum + temp;
-    n = parseInt(n) / 10; // remove last digit
+    n = parseInt(n / 10); // remove last digit
   }
 
   // Check if the sum is single digit
@@ -42,7 +47,32 @@ let digitalRoot = (n) => {
   return digitalRoot(sum);
 };
 
+console.log("digital root");
 console.log(digitalRoot(257520643)); //7
 console.log(digitalRoot(5674)); // 4
 console.log(digitalRoot(493193)); // 2
 console.log(digitalRoot(34758)); // 9
+
+// Using mathematical formula.
+// We are going to subtract 1 from the number and then divide it by 9 and add 1 to its remainder.
+// The mathematics behind this is called Modular Arithmetic — more specifically, the rule used here is known as Casting Out Nines.
+// Modular Arithmetic - A branch of mathematics that works with remainders using the modulo operator (%).
+// (n - 1) % 9 + 1 is pure modulo-9 arithmetic.
+// Any number ≡ sum of its digits (mod 9)
+let digitalRoot2 = (n) => {
+  return ((n - 1) % 9) + 1;
+};
+// We are using just simple mathematical formula so Time complexity is O(1).
+// We are not using any extra space so Space complexity is O(1).
+
+console.log("digital root");
+console.log(digitalRoot2(257520643)); //7
+console.log(digitalRoot2(5674)); // 4
+console.log(digitalRoot2(493193)); // 2
+console.log(digitalRoot2(34758)); // 9
+
+// n = 257520643
+// (257520643 - 1) % 9 + 1
+// = 257520642 % 9 + 1
+// = 6 + 1
+// = 7
