@@ -18,6 +18,8 @@
 // We are going to traverse and sum all the subarrays of the given array and check if they equal to the given sum k.
 // If they are equal then we are going to print them.
 
+// Time complexity: O(N ^ 2). We traversing twice with inner loop, so Time complexity is O(n^2).
+// Space complexity: O(N). We are storing the array and in worst case all the items of array can equal to the sum, so Space complexity is O(n).
 function printSubArrays(arr, k) {
   // get the size the of the array
   let length = arr.length;
