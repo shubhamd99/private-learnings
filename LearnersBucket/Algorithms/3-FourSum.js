@@ -1,6 +1,9 @@
 // Given an array of integers and a target we have to check if there exists a quadruplets (four elements) in the array
 // such that there sum is equal to the given target. Popularly know as 4 sum problem.
 
+// Use i < len when you only need arr[i].
+// Use i < len - 1 when you need arr[i] AND at least one more element after it.
+
 // Naïve recursive approach to solve 4 sum problem
 // For each item in the array we either consider it or ignore it and recur for the remaining items.
 // If the given target can be achieved by summation of quadruplets then return true or else return false.

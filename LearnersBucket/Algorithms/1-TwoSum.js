@@ -10,6 +10,9 @@
 // or
 // false (If Not found)
 
+// Use i < len when you only need arr[i].
+// Use i < len - 1 when you need arr[i] AND at least one more element after it.
+
 // Brute Force Method (Naive Approach)
 // In brute force method we will evaluate all the possible pairs and check if desired sum is found.
 // Time complexity: O(n^2). Space complexity: O(1).

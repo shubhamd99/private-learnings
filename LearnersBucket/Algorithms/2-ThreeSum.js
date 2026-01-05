@@ -10,6 +10,9 @@
 // true
 // [1, 16, 3]
 
+// Use i < len when you only need arr[i].
+// Use i < len - 1 when you need arr[i] AND at least one more element after it.
+
 // Naïve brute force solution
 // 3 nested loops can be used to consider every triplets in the given array and determine if desired sum is found.
 // Time Complexity → O(n³)
