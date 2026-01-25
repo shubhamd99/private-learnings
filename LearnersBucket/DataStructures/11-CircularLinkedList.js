@@ -235,6 +235,14 @@ class CircularLinkedList {
   };
 }
 
+// Time Complexity:
+// Access (by index) → O(n)
+// Search → O(n)
+// Insert - O(1)
+
+// Space Complexity:
+// Overall space → O(n)
+
 let cLL = new CircularLinkedList();
 cLL.append(20);
 cLL.append(30);
