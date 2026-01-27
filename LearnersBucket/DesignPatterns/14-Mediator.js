@@ -210,3 +210,16 @@ plane2.landed();
 // Plane B2: Landed.
 // ControlTower: Plane B2 has landed.
 // ControlTower: Plane C3 is clear to take off.
+
+// REAL FRONTEND USE CASES
+
+// Complex Form (Checkout / Signup / KYC)
+// Without Mediator (bad)
+// Checkbox directly enables button
+// Coupon field directly changes price
+// Address field directly triggers shipping logic
+// Everything depends on everything → spaghetti
+
+// Checkbox ─┐
+// Coupon ───┼──> FormController (Mediator) ──> Submit Button
+// Address ──┘
