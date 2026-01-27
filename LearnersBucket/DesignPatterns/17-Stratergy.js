@@ -153,95 +153,95 @@ class BarcodeStrategy {
 }
 
 class NormalBarcodeStrategy extends BarcodeStrategy {
-  canHandle(barcode) {
+  match(barcode) {
     return /^[0-9]+$/.test(barcode);
   }
 
   parse(barcode) {
-    return {
-      type: "normal",
-      code: barcode,
-    };
+    return { type: "normal", code: barcode };
   }
 
   process(data) {
-    console.log("Processing NORMAL barcode:", data.code);
-    // 👉 normal lookup logic
+    console.log("NORMAL logic:", data.code);
   }
 }
 
 class AFormatBarcodeStrategy extends BarcodeStrategy {
-  canHandle(barcode) {
+  match(barcode) {
     return barcode.startsWith("a_");
   }
 
   parse(barcode) {
     const [, code] = barcode.split("_");
-    return {
-      type: "A",
-      code,
-    };
+    return { type: "A", code };
   }
 
   process(data) {
-    console.log("Processing A-FORMAT barcode:", data.code);
-    // 👉 special logic for A format
+    console.log("A-FORMAT logic:", data.code);
   }
 }
 
 class BFormatBarcodeStrategy extends BarcodeStrategy {
-  canHandle(barcode) {
+  match(barcode) {
     return barcode.startsWith("b_");
   }
 
   parse(barcode) {
     const [, id, itemCode] = barcode.split("_");
-    return {
-      type: "B",
-      id,
-      itemCode,
-    };
+    return { type: "B", id, itemCode };
   }
 
   process(data) {
-    console.log(
-      "Processing B-FORMAT barcode:",
-      "id =",
-      data.id,
-      "itemCode =",
-      data.itemCode,
-    );
-    // 👉 complex logic for B format
+    console.log("B-FORMAT logic:", data.id, data.itemCode);
   }
 }
 
-class BarcodeHandler {
+class BarcodeStrategyOrchestrator {
   constructor() {
-    this.strategies = [
-      new NormalBarcodeStrategy(),
-      new AFormatBarcodeStrategy(),
-      new BFormatBarcodeStrategy(),
-    ];
+    this.strategies = [];
   }
 
-  handle(barcode) {
-    const strategy = this.strategies.find((s) => s.canHandle(barcode));
+  // Register strategy (plugin style)
+  register(strategy) {
+    this.strategies.push(strategy);
+  }
 
+  // Find correct strategy
+  resolve(barcode) {
+    const strategy = this.strategies.find((s) => s.match(barcode));
     if (!strategy) {
-      throw new Error("Unknown barcode format: " + barcode);
+      throw new Error("No strategy found for barcode: " + barcode);
     }
+    return strategy;
+  }
 
-    const parsedData = strategy.parse(barcode);
-    strategy.process(parsedData);
+  // Main entry point
+  handle(barcode) {
+    const strategy = this.resolve(barcode);
+
+    console.log("Using strategy:", strategy.constructor.name);
+
+    const parsed = strategy.parse(barcode);
+    return strategy.process(parsed);
   }
 }
 
-const handler = new BarcodeHandler();
+const orchestrator = new BarcodeStrategyOrchestrator();
 
-handler.handle("12233");
-handler.handle("a_12233");
-handler.handle("b_12233_itemCode");
+orchestrator.register(new NormalBarcodeStrategy());
+orchestrator.register(new AFormatBarcodeStrategy());
+orchestrator.register(new BFormatBarcodeStrategy());
 
-// Processing NORMAL barcode: 12233
-// Processing A-FORMAT barcode: 12233
-// Processing B-FORMAT barcode: id = 12233 itemCode = itemCode
+// Test
+orchestrator.handle("12233");
+orchestrator.handle("a_12233");
+orchestrator.handle("b_12233_itemX");
+
+// Using strategy: NormalBarcodeStrategy
+// NORMAL logic: 12233
+
+// Using strategy: AFormatBarcodeStrategy
+// A-FORMAT logic: 12233
+
+// Using strategy: BFormatBarcodeStrategy
+// B-FORMAT logic: 12233 itemX
