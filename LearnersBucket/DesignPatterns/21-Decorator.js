@@ -236,3 +236,6 @@ class CacheDecorator extends HttpClientDecorator {
 // Lets JS event loop run other things
 // Resumes when promise resolves
 // Only ONE real slow operation exists - await fetch(...)
+
+// Builder is used to construct complex objects step-by-step,
+// while Decorator is used to dynamically add behavior to objects without changing their class.
