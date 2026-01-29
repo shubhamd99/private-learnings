@@ -1,5 +1,115 @@
 # 📚 Data Structures Guide (JavaScript)
 
+## Main Categories of Data Structures
+
+### Primitive Data Structures
+
+These are the basic built-in data types provided by the programming language. They store single values and are used as building blocks for complex structures.
+
+Examples:
+
+- Number
+- String
+- Boolean
+- Null
+- Undefined
+- Char (in other languages)
+
+Characteristics:
+
+- Store only one value
+- Simple and fixed size
+- Directly supported by CPU / language
+- Fast operations
+
+Real-world use:
+
+- Counters, flags, IDs, values, status variables
+
+### Non-Primitive (Composite) Data Structures
+
+These are complex data structures built using primitive data types. They can store multiple values and represent relationships between data.
+
+Examples:
+
+- Array
+- Object
+- Stack
+- Queue
+- LinkedList
+- Tree
+- Graph
+- Heap
+- Trie
+- Set
+- Map
+
+Characteristics:
+
+- Store multiple values
+- Can represent complex data relationships
+- Can be linear or non-linear
+- Can be static or dynamic
+
+Real-world use:
+
+- Databases, UI trees, file systems, social networks, caches
+
+## Another Very Important Classification
+
+### Linear Data Structures
+
+Data elements are arranged sequentially one after another.
+
+Examples:
+
+- Array
+- LinkedList
+- Stack
+- Queue
+- Deque
+
+### Non-Linear Data Structures
+
+Data elements are arranged in hierarchical or graph form, not sequentially.
+
+Examples:
+
+- Tree
+- Graph
+- Heap
+- Trie
+
+## Another Classification (Concept vs Implementation)
+
+### Abstract Data Types (ADT)
+
+An Abstract Data Type (ADT) describes WHAT a data structure does, not HOW it is implemented.
+It only defines:
+What operations are allowed
+What behavior is expected
+Not the internal storage
+
+Examples:
+
+- Stack
+- Queue
+- Deque
+  -List
+- Set
+- Map
+
+### Concrete Data Structures
+
+Defines how data is stored in memory.
+
+Examples:
+
+- Array
+- LinkedList
+- Hash Table
+- Tree Nodes
+
 ## Stack
 
 A linear data structure that follows LIFO (Last In First Out) principle. All operations happen from one end called the top. Main operations are push, pop, peek, and isEmpty.
