@@ -212,3 +212,19 @@ console.log(trie.find("pe"));
 // true
 // ["pickled", "picked", "piper"]
 // ["peter"]
+
+// The time complexity of searching, inserting, and deleting from a trie depends on the
+// length of the word that’s being searched for, inserted, or deleted,
+// and the number of total words, n, making the runtime of these operations O(a * n).
+// Insert - O(a * n)
+// Search - O(a * n)
+// Delete - O(a * n)
+// Find - Object(p + n) - where p is the length of the prefix and n is the number of words.
+
+// Space - Worst
+// O(n * k)
+
+// Applications of Trie data structure
+// It is rarely used, however, if required it used in combination with other data structures,
+// the most prominent example of its use is the autocomplete feature of search
+// where we type alphabets, and all other words starting with given alphabets are suggested like in search engine.
