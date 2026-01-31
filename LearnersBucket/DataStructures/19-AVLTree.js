@@ -248,3 +248,7 @@ tree.preOrder();
 // 11;
 // 53;
 // 61;
+
+// Search - O(LogN)
+// Insert - O(LogN)
+// Delete - O(LogN)
