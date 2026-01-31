@@ -277,6 +277,7 @@ class Node {
   }
 }
 
+// A weighted graph is a graph where edges carry numerical weights instead of being just connections.
 class WeightGraph {
   constructor(edges) {
     this.edges = edges;
