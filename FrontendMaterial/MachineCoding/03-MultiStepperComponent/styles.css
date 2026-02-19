@@ -7,17 +7,6 @@
   position: relative;
 }
 
-.progress-line {
-  position: absolute;
-  height: 2px;
-  background: grey;
-  width: 0;
-  top: 50%;
-  left: 0;
-  z-index: -1;
-  transition: all 0.25s ease;
-}
-
 .steps-wrapper {
   display: flex;
   align-items: center;
@@ -38,4 +27,15 @@
 
 .steps.active {
   background-color: skyblue;
+}
+
+.progress-line {
+  position: absolute;
+  height: 2px;
+  background: grey;
+  width: 0;
+  top: 50%;
+  left: 0;
+  z-index: -1;
+  transition: all 0.25s ease;
 }

@@ -49,10 +49,11 @@ function Stepper({ list }) {
 
   // Calculate the width of the progress line by
   // dividing the total width by the number of steps and multiplying by the current step
-  const progressLineWidth = (100 / (list.length - 1)) * currentStep;
+  // Progress % = (Current position / Total gaps) × 100
+  const progressLineWidth = (currentStep / (stepsCount - 1)) * 100;
 
   return (
-    <section className="stepper">
+    <section>
       <div className="steps-container">
         <div className="steps-wrapper">{steps}</div>
         <div
