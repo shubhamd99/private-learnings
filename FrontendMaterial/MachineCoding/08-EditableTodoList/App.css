@@ -1,0 +1,45 @@
+.App {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  text-align: center;
+  max-width: 300px;
+  margin: 0 auto;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px;
+  border-bottom: 1px solid #000;
+}
+
+.close {
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s ease;
+}
+
+.item:hover .close {
+  opacity: 1;
+}
+
+.circle {
+  width: 30px;
+  height: 30px;
+  border-radius: 50px;
+  border: 1px solid green;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+input {
+  width: 100%;
+  padding: 5px;
+  font: 1.2em;
+  margin-bottom: 20px;
+}
+
+.strike {
+  text-decoration: line-through;
+}
