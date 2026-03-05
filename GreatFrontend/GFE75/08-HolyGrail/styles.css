@@ -1,0 +1,104 @@
+/* Holy Grail Layout
+   Structure: Header → [Nav | Main | Aside] → Footer
+   The "holy grail" is a classic CSS layout with a full-width header/footer
+   and three columns in between (left sidebar, center content, right sidebar) */
+
+/* ─── GLOBAL RESET ────────────────────────────────────────────────────────── */
+
+/* Applies to every element — padding/border are included in width calculations,
+   preventing unexpected overflow */
+* {
+  box-sizing: border-box;
+}
+
+/* ─── BODY ────────────────────────────────────────────────────────────────── */
+
+/* min-height: 100vh ensures the page always fills the full viewport height,
+   even when content is short */
+body {
+  font-family: sans-serif;
+  font-size: 12px;
+  font-weight: bold;
+  margin: 0;         /* Remove default browser margin */
+  min-height: 100vh;
+}
+
+/* ─── ROOT CONTAINER ──────────────────────────────────────────────────────── */
+
+/* flex-direction: column stacks children vertically: header → columns → footer
+   min-height: 100vh makes the root fill the whole screen so footer stays at bottom */
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+/* ─── SHARED SECTION STYLES ───────────────────────────────────────────────── */
+
+/* Consistent padding and centered text for all layout sections */
+header,
+nav,
+main,
+aside,
+footer {
+  padding: 12px;
+  text-align: center;
+}
+
+/* ─── HEADER ──────────────────────────────────────────────────────────────── */
+
+/* Full-width top bar — no width: 100% needed!
+   #root is display:flex + flex-direction:column, so the cross-axis is horizontal.
+   Flex children stretch to fill the cross-axis by default (align-items: stretch),
+   which automatically makes header/footer span the full width. */
+header {
+  background-color: tomato;
+  height: 60px;
+}
+
+/* ─── COLUMNS WRAPPER ─────────────────────────────────────────────────────── */
+
+/* Wraps nav + main + aside in a horizontal row.
+   flex-grow: 1 makes this section expand to fill all remaining vertical space
+   between header and footer — this is what keeps the footer pinned to the bottom */
+.columns {
+  display: flex;
+  flex-grow: 1;
+}
+
+/* ─── LEFT SIDEBAR (NAV) ──────────────────────────────────────────────────── */
+
+/* flex-shrink: 0 prevents the sidebar from shrinking when space is tight.
+   Fixed width of 100px keeps it narrow and stable */
+nav {
+  background-color: coral;
+  flex-shrink: 0;
+  width: 100px;
+}
+
+/* ─── MAIN CONTENT ────────────────────────────────────────────────────────── */
+
+/* flex-grow: 1 makes main absorb all remaining horizontal space
+   between the two sidebars — this is the "fluid center" of the holy grail layout */
+main {
+  background-color: moccasin;
+  flex-grow: 1;
+}
+
+/* ─── RIGHT SIDEBAR (ASIDE) ───────────────────────────────────────────────── */
+
+/* Mirror of nav — fixed width, won't shrink, stays on the right */
+aside {
+  background-color: sandybrown;
+  flex-shrink: 0;
+  width: 100px;
+}
+
+/* ─── FOOTER ──────────────────────────────────────────────────────────────── */
+
+/* Full-width bottom bar — same reason as header (flex cross-axis stretch).
+   Stays at the bottom because .columns has flex-grow: 1, pushing footer down. */
+footer {
+  background-color: slategray;
+  height: 100px;
+}
