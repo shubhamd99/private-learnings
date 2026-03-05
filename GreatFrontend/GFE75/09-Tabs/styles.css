@@ -1,0 +1,71 @@
+body {
+  font-family: sans-serif;
+}
+
+/* ─── WRAPPER ─────────────────────────────────────────────────────────────── */
+
+/* Centers the tabs component vertically inside the viewport */
+.wrapper {
+  align-items: center;
+  display: flex;
+}
+
+/* ─── TABS CONTAINER ──────────────────────────────────────────────────────── */
+
+/* Stacks the tab bar (tabs-list) and the tab panel content vertically.
+   gap: 8px adds spacing between the tab buttons row and the content below.
+   NOTE: gap only works on flex or grid containers — that's the real reason
+   display:flex is used here, not just for layout direction. */
+.tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ─── TAB BAR ─────────────────────────────────────────────────────────────── */
+
+/* Lays out tab buttons horizontally in a row with small gaps between them */
+.tabs-list {
+  display: flex;
+  gap: 6px;
+}
+
+/* ─── INDIVIDUAL TAB BUTTON ───────────────────────────────────────────────── */
+
+/* --active-color is a CSS custom property (variable) scoped to this element.
+   Used to keep the active/hover color consistent in one place — easy to change.
+
+   background: none  → removes default browser button background
+   border            → gives each tab a visible outline
+   border-radius     → slightly rounded corners
+   cursor: pointer   → shows hand cursor on hover (signals it's clickable) */
+.tabs-list-item {
+  --active-color: blueviolet;
+
+  background: none;
+  border: 1px solid #000;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 6px 10px;
+}
+
+/* ─── HOVER STATE ─────────────────────────────────────────────────────────── */
+
+/* On hover: change border and text to the active color (blueviolet).
+   Background stays transparent — only the active tab gets a filled background */
+.tabs-list-item:hover {
+  border-color: var(--active-color);
+  color: var(--active-color);
+}
+
+/* ─── ACTIVE TAB STATE ────────────────────────────────────────────────────── */
+
+/* The selected/active tab gets a filled blueviolet background with white text.
+   The :hover selector is also overridden here so hovering the active tab
+   doesn't change its appearance (it stays fully filled, not just outlined) */
+.tabs-list-item--active,
+.tabs-list-item--active:hover {
+  border-color: var(--active-color);
+  background-color: var(--active-color);
+  color: #fff;
+}
