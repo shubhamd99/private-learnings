@@ -1,0 +1,110 @@
+/* ─── GLOBAL RESET ────────────────────────────────────────────────────────── */
+
+/* Remove default browser margin/padding from every element so layout
+   is fully controlled by our own styles */
+* {
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── BODY ────────────────────────────────────────────────────────────────── */
+
+/* #f6f6ef is the classic Hacker News beige background color */
+body {
+  background-color: #f6f6ef;
+  color: #000;
+  font-family: sans-serif;
+  font-size: 16px;
+  padding: 16px;
+}
+
+/* ─── LINKS ───────────────────────────────────────────────────────────────── */
+
+/* color: inherit — link color matches surrounding text instead of default blue.
+   Removes underline by default for a cleaner look; add it back on hover. */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
+
+/* ─── APP CONTAINER ───────────────────────────────────────────────────────── */
+
+/* max-width keeps content readable on wide screens.
+   margin: 0 auto centers the container horizontally. */
+.app {
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* ─── JOBS LIST ───────────────────────────────────────────────────────────── */
+
+/* display: grid is used purely to get row-gap between job cards.
+   NOTE: gap only works on flex/grid containers — that's the reason display:grid is here. */
+.jobs {
+  display: grid;
+  row-gap: 16px;
+}
+
+/* ─── JOB POST CARD ───────────────────────────────────────────────────────── */
+
+/* Each job card is also a grid so we get row-gap between title and metadata.
+   White card on the beige background creates visual separation between posts. */
+.post {
+  background-color: #fff;
+  border: 1px solid #dcdcdc;
+  padding: 16px;
+  display: grid;
+  row-gap: 8px; /* Space between .post__title and .post__metadata */
+}
+
+/* ─── POST TITLE ──────────────────────────────────────────────────────────── */
+
+/* font-size matches body (16px) intentionally — h2 default is larger,
+   so we reset it to keep the card compact. margin-top:0 removes h2 default margin. */
+.post__title {
+  font-size: 16px;
+  font-weight: bold;
+  margin-top: 0;
+}
+
+/* ─── POST METADATA (author · timestamp) ─────────────────────────────────── */
+
+/* Slightly smaller and muted color to visually de-emphasize secondary info */
+.post__metadata {
+  font-size: 14px;
+  color: #444;
+}
+
+/* ─── LOADING TEXT ────────────────────────────────────────────────────────── */
+
+.load {
+  color: #4d4d4d;
+  font-weight: bold;
+  font-size: 18px;
+}
+
+/* ─── LOAD MORE BUTTON ────────────────────────────────────────────────────── */
+
+/* HN orange brand color. border: none removes default button border. */
+.load-more-button {
+  background-color: #ff6600;
+  border: none;
+  border-radius: 4px;
+  color: #fff;
+  margin-top: 20px;
+  padding: 8px 12px;
+}
+
+/* Only show pointer cursor when the button is NOT disabled.
+   :not(:disabled) avoids showing pointer when loading is in progress */
+.load-more-button:not(:disabled) {
+  cursor: pointer;
+}
+
+.load-more-button:hover {
+  background-color: #e6fc00;
+}
