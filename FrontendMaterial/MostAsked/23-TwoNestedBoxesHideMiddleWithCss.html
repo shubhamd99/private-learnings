@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Nested Boxes</title>
+    <style>
+      /*    used ::after just to show labels like 
+            "OUTER", "MIDDLE", "INNER" inside the boxes — 
+            purely for visual clarity.
+      */
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 60px;
+        background: #0f0f0f;
+        font-family: "Courier New", monospace;
+        color: #fff;
+      }
+
+      h2 {
+        font-size: 13px;
+        letter-spacing: 3px;
+        text-transform: uppercase;
+        color: #555;
+        margin-bottom: -40px;
+      }
+
+      /* ───── OUTER BOX ───── */
+      .outer {
+        width: 240px;
+        height: 240px;
+        border: 2px solid #e63946;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+      }
+
+      /* .outer::after {
+        content: "OUTER";
+        position: absolute;
+        top: 8px;
+        left: 12px;
+        font-size: 10px;
+        letter-spacing: 2px;
+        color: #e63946;
+      } */
+
+      /* ───── MIDDLE BOX ───── */
+      .middle {
+        width: 160px;
+        height: 160px;
+        border: 2px solid #f4a261;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+
+        /* HIDE MIDDLE BOX — CSS only */
+        visibility: hidden;
+      }
+
+      /* .middle::after {
+        content: "MIDDLE";
+        position: absolute;
+        top: 8px;
+        left: 12px;
+        font-size: 10px;
+        letter-spacing: 2px;
+        color: #f4a261;
+      } */
+
+      /* ───── INNER BOX ───── */
+      .inner {
+        width: 80px;
+        height: 80px;
+        border: 2px solid #2a9d8f;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+
+        /* re-show inner — visibility is inherited, override it */
+        visibility: visible;
+      }
+
+      /* .inner::after {
+        content: "INNER";
+        position: absolute;
+        top: 6px;
+        left: 8px;
+        font-size: 9px;
+        letter-spacing: 2px;
+        color: #2a9d8f;
+      } */
+    </style>
+  </head>
+  <body>
+    <h2>Nested Boxes — Middle Hidden</h2>
+
+    <div class="outer">
+      <div class="middle">
+        <div class="inner"></div>
+      </div>
+    </div>
+
+    <script>
+      // create boxes via JS
+      const outer = document.querySelector(".outer");
+      const middle = document.querySelector(".middle");
+      const inner = document.querySelector(".inner");
+
+      console.log("Outer:", outer);
+      console.log("Middle:", middle); // exists in DOM just hidden visually
+      console.log("Inner:", inner);
+    </script>
+  </body>
+</html>
