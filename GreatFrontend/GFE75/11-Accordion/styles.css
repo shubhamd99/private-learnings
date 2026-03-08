@@ -1,0 +1,89 @@
+body {
+  font-family: sans-serif;
+}
+
+/* 
+   Container to center the accordion or manage general layout. 
+   Flex here centers children horizontally.
+*/
+.wrapper {
+  align-items: center;
+  display: flex;
+}
+
+/* 
+   Main accordion container. 
+   We use 'display: flex' + 'flex-direction: column' to stack items vertically.
+   In UI design, nested flex containers allow precise control over different levels
+   of the hierarchy (Container -> Item -> Button content).
+*/
+.accordion {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+/* 
+   Represents a single section of the accordion.
+   Repetition of 'display: flex' and 'flex-direction: column' here is intentional:
+   It ensures that the header (button) and body (contents) are stacked vertically
+   within the item itself, while also allowing the use of 'row-gap'.
+*/
+.accordion-item {
+  display: flex;
+  flex-direction: column;
+  row-gap: 4px;
+  padding: 4px 0;
+}
+
+/* Add a divider between items, but not before the first one */
+.accordion-item:not(:first-child) {
+  border-top: 1px solid #eee;
+}
+
+/* 
+   Header button for the accordion item.
+   We switch back to the default 'flex-direction: row' (implicit) here 
+   to align the text and the icon horizontally.
+*/
+.accordion-item-title {
+  align-items: center;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-weight: 500;
+  padding: 4px;
+  justify-content: space-between; /* Pushes title to left, icon to right */
+  text-align: start;
+  display: flex;
+}
+
+.accordion-item-title:hover {
+  background-color: #eee;
+}
+
+/* 
+   Chevron icon created using a square with borders on two sides 
+   and then rotated 45 degrees.
+*/
+.accordion-icon {
+  border: solid currentcolor;
+  border-width: 0 2px 2px 0; /* Bottom and Right borders */
+  display: inline-block;
+  height: 8px;
+  pointer-events: none;
+  transform: translateY(-2px) rotate(45deg); /* Points down by default */
+  width: 8px;
+}
+
+/* Rotate the chevron 180 degrees (relative to 45 deg) when expanded */
+.accordion-icon--rotated {
+  transform: translateY(2px) rotate(-135deg); /* Points up */
+}
+
+/* Styling for the hidden/visible content area */
+.accordion-item-contents {
+  font-size: 24px;
+  line-height: 1.2em;
+  padding: 4px;
+}
