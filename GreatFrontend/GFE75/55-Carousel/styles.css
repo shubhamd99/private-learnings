@@ -1,0 +1,104 @@
+* {
+  box-sizing: border-box; /* Includes padding and border in the element's total width and height */
+  margin: 0; /* Removes consistent default margin applied by various browsers */
+}
+
+body {
+  font-family: sans-serif;
+}
+
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  justify-content: center; /* Centers the carousel vertically in the column */
+  align-items: center; /* Centers the carousel horizontally */
+
+  height: 100vh; /* Full viewport height so the flex centering works on the whole screen */
+  width: 100vw; /* Full viewport width to avoid unwanted horizontal overflow */
+}
+
+.image-carousel {
+  background-color: #000;
+  height: 400px;
+  overflow: hidden; /* Hides images shifted outside the container, essential for sliding UI */
+  width: min(600px, 100vw); /* Responsive width: max 600px, but limits to 100vw on smaller screens */
+  position: relative; /* Positioning context for absolute positioned children (images, controls) */
+}
+
+.image-carousel__image {
+  object-fit: contain; /* Scales image to fit container without cropping, preserving aspect ratio */
+  position: absolute; /* Removes images from normal flow to stack them on top of each other */
+  inset: 0; /** inset is a shorthand for setting all four position offsets at once: top, bottom, left, right **/
+  width: 100%;
+  height: 100%;
+}
+
+.image-carousel__button {
+  --size: 40px;
+  height: var(--size);
+  width: var(--size);
+
+  background-color: #0008; /* Hex code with alpha transparency component */
+  border-radius: 100%; /* Makes the button a perfect circle */
+  border: none;
+  color: #fff;
+  cursor: pointer;
+
+  position: absolute; /* Overlay the buttons on top of the carousel track */
+  top: 50%;
+
+  /** 
+  Because top: 50% alone does not truly center the element. 
+  top: 50% moves the element's top edge to the 50% mark of the parent.
+  translateY(-50%) moves the element up by 50% of its own height.
+  **/
+  transform: translateY(-50%);
+}
+
+.image-carousel__button:hover {
+  background-color: #000b;
+}
+
+.image-carousel__button--prev {
+  left: 16px;
+}
+
+.image-carousel__button--next {
+  right: 16px;
+}
+
+.image-carousel__pages {
+  background-color: #0008;
+  border-radius: 12px;
+  display: inline-flex; /* Container uses flexbox for children (dots), but flows inline alongside other elements (unlike block-level flex) */
+  gap: 8px; /* Native gap spacing between flex items (pagination dots) */
+  padding: 8px;
+
+  position: absolute; /* Overlays the pagination wrapper at the bottom center */
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%); /* Centers element perfectly by shifting it back 50% of its own width */
+}
+
+.image-carousel__pages__button {
+  --size: 8px;
+  height: var(--size);
+  width: var(--size);
+
+  border: none;
+  border-radius: 100%;
+  border-color: #666;
+  cursor: pointer;
+  display: inline-block; /* Sits inline like text, but allows setting explicit width/height and margins/padding (unlike standard inline) */
+  flex-shrink: 0; /* Prevents dot icons from shrinking forcefully if a container size shrinks */
+  padding: 0;
+  transition: background-color 0.3s ease-in-out; /* Smooth transition effect for pagination dot states */
+}
+
+.image-carousel__pages__button:hover {
+  background-color: #ccc;
+}
+
+.image-carousel__pages__button--active {
+  background-color: salmon;
+}
