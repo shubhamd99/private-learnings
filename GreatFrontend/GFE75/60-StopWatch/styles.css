@@ -1,0 +1,61 @@
+/* ─── Base ─────────────────────────────────────────────────────────────────── */
+body {
+  /* Use the OS/browser default sans-serif font stack — keeps the UI clean
+     without pulling in an external font file. */
+  font-family: sans-serif;
+}
+
+/* ─── Layout Wrapper ─────────────────────────────────────────────────────────
+   Interview note: Flexbox is the go-to for single-axis alignment.
+   `align-items: center` vertically centres children along the cross axis. */
+.wrapper {
+  align-items: center;
+  display: flex;
+}
+
+/* ─── .time — Clickable Time Display ────────────────────────────────────────
+   The time display doubles as a large tap target to toggle the stopwatch.
+   We reset browser <button> defaults, then turn it into a flex row so that
+   the h / m / s segments sit side-by-side with consistent spacing.
+
+   Key properties:
+   • align-items: baseline   → all digit spans share the same text baseline,
+                               so "62 px" numbers and "24 px" units look aligned.
+   • background-color: transparent + border: none → strips the default button
+                               chrome so it looks like plain text.
+   • cursor: pointer         → communicates interactivity to the user.
+   • gap: 16px               → uniform whitespace between each time segment
+                               (h / m / s / ms) without extra margins.
+   • user-select: none       → prevents accidental text selection when the user
+                               rapidly clicks/taps Start & Stop. */
+.time {
+  align-items: baseline;
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  gap: 16px;
+  user-select: none;
+}
+
+/* ─── .time-unit — Unit Labels (h, m, s) ────────────────────────────────────
+   Rendered at a smaller size than the numeric digits so the labels are
+   visually subordinate — the numbers are the primary information. */
+.time-unit {
+  font-size: 24px;
+}
+
+/* ─── .time-number — Large Numeric Digits ───────────────────────────────────
+   The dominant visual element: big, bold-feeling numbers that are easy to
+   read at a glance. Applied to hours, minutes, and seconds. */
+.time-number {
+  font-size: 62px;
+}
+
+/* ─── .time-number--small — Centisecond Digits (modifier class) ─────────────
+   BEM modifier pattern: inherits .time-number styles and overrides font-size.
+   Centiseconds (0-99) are shown smaller to signal lower precision/importance
+   compared to the whole-second counter above. */
+.time-number--small {
+  font-size: 36px;
+}
