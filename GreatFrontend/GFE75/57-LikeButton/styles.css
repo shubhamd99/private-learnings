@@ -1,0 +1,132 @@
+/* ============================================================
+   LIKE BUTTON — styles.css
+   Interview Revision Notes: CSS Concepts Covered
+   - CSS Custom Properties (variables)
+   - Flexbox layout
+   - BEM-like naming convention (block__element--modifier)
+   - Pseudo-classes (:hover)
+   - CSS specificity & selector stacking
+   ============================================================ */
+
+/* Base font for the whole page */
+body {
+  font-family: sans-serif;
+}
+
+/* ============================================================
+   ERROR MESSAGE
+   - font-size: 12px → small helper text, smaller than body (16px default)
+   - margin-top: 8px → visual spacing between button and error message
+   ============================================================ */
+.error-message {
+  font-size: 12px;
+  margin-top: 8px;
+}
+
+/* ============================================================
+   LIKE BUTTON — BASE STYLES
+   This is the base block for the like button component.
+
+   CSS Custom Properties (variables):
+   --default-color: used for the un-liked (neutral) state
+   --active-color:  used for the liked/hover (active) state
+   Defined here at component scope so child elements can inherit them.
+
+   Layout:
+   - display: flex + align-items: center → horizontally aligns the
+     heart icon and count text side-by-side, vertically centered
+
+   Shape & Size:
+   - border-radius: 32px → pill/capsule shape (value >= height/2)
+   - border-style: solid + border-width: 2px → visible border outline
+   - height: 32px → fixed height for consistency
+   - padding: 4px 8px → internal spacing (vertical horizontal)
+
+   Typography:
+   - font-weight: bold → makes the count text stand out
+
+   UX:
+   - cursor: pointer → indicates interactivity to the user
+   - gap: 8px → Flexbox gap between icon and label (cleaner than margins)
+   ============================================================ */
+.like-button {
+  --default-color: #888; /* Neutral grey for un-liked state */
+  --active-color: red;   /* Red for liked/hover state */
+
+  display: flex;
+  align-items: center;  /* Vertically center icon + count */
+  border-style: solid;
+  border-radius: 32px;  /* Pill shape — value >= height/2 */
+  border-width: 2px;
+  cursor: pointer;      /* Shows hand cursor — signals interactivity */
+  font-weight: bold;
+  gap: 8px;             /* Flexbox gap between icon and count */
+  height: 32px;
+  padding: 4px 8px;     /* Shorthand: top/bottom | left/right */
+}
+
+/* ============================================================
+   DEFAULT (UN-LIKED) STATE
+   Uses the --default-color variable defined in .like-button.
+   - White background → unfilled appearance
+   - Grey border and text → neutral, inactive look
+
+   BEM Note: `.like-button--default` follows the BEM modifier pattern
+   (block--modifier) to represent a specific visual state.
+   ============================================================ */
+.like-button--default {
+  background-color: #fff;
+  border-color: var(--default-color); /* CSS var: resolves to #888 */
+  color: var(--default-color);
+}
+
+/* ============================================================
+   HOVER STATE
+   Triggered when the user moves their cursor over the button.
+   - Switches border and text to --active-color (red) to preview
+     the "liked" state without committing to it.
+   - Background stays white → hover is a preview, not the full active state.
+
+   Specificity Note: `.like-button:hover` (0,2,0) will be overridden
+   by `.like-button--liked:hover` (0,3,0) below, which is intentional —
+   liked state must NOT revert on hover.
+   ============================================================ */
+.like-button:hover {
+  background-color: #fff;
+  border-color: var(--active-color); /* Preview the active red color */
+  color: var(--active-color);
+}
+
+/* ============================================================
+   LIKED (ACTIVE) STATE — including hover override
+   Two selectors share the same declaration block:
+   1. `.like-button--liked`        → applied when button IS liked
+   2. `.like-button--liked:hover`  → prevents the hover rule above
+      from reverting the button back to white background when liked.
+
+   Why stack both selectors?
+   Without `.like-button--liked:hover`, hovering a liked button
+   would apply the plain `:hover` rule (white bg) — breaking the UX.
+   Stacking overrides it cleanly.
+
+   Visual Result:
+   - Solid red background → fully filled, committed "liked" appearance
+   - White text → contrast against the red background
+   ============================================================ */
+.like-button--liked,
+.like-button--liked:hover {
+  background-color: var(--active-color); /* Solid red fill */
+  border-color: var(--active-color);
+  color: #fff; /* White text for contrast against red */
+}
+
+/* ============================================================
+   LIKE BUTTON ICON WRAPPER
+   - display: flex → ensures the SVG/icon inside is flex-level,
+     preventing default inline spacing/baseline issues.
+   - This is a common pattern to normalize SVG icon rendering
+     inside flex containers.
+   ============================================================ */
+.like-button-icon {
+  display: flex; /* Normalizes icon alignment inside the button */
+}
