@@ -1,0 +1,74 @@
+/* ============================================================
+   BASE STYLES
+   ============================================================ */
+
+/* Reset browser default font for consistency across all browsers.
+   "sans-serif" is a generic family — the browser will pick the
+   best available sans-serif font (e.g. Arial, Helvetica). */
+body {
+  font-family: sans-serif;
+}
+
+/* ============================================================
+   LAYOUT WRAPPER
+   ============================================================ */
+
+/* Centers all traffic lights vertically and horizontally on the page.
+   Using flex column so lights stack top-to-bottom by default.
+   gap: 16px adds spacing between sibling flex children (the traffic lights). */
+.wrapper {
+  display: flex;
+  flex-direction: column;  /* Stack children vertically */
+  align-items: center;     /* Center children on the cross axis (horizontal) */
+  justify-content: center; /* Center children on the main axis (vertical) */
+  gap: 16px;               /* Space between each <TrafficLight> rendered */
+}
+
+/* ============================================================
+   TRAFFIC LIGHT CONTAINER
+   ============================================================ */
+
+/* The outer casing / housing of the traffic light.
+   The black background + border-radius gives the classic signal box look.
+   display: flex lets us arrange the individual light bulbs (circles)
+   either in a row (horizontal) or column (vertical) using a modifier class. */
+.traffic-light-container {
+  background-color: #000;  /* Black casing, like a real traffic light housing */
+  border-radius: 8px;      /* Rounded corners on the box */
+  display: flex;           /* Arranges Light children in a flex row by default */
+  padding: 8px;            /* Inner padding between the casing edge and the bulbs */
+  gap: 8px;                /* Space between individual light bulbs */
+}
+
+/* BEM Modifier: --vertical overrides the flex direction to column.
+   This is applied conditionally in JS when layout="vertical" prop is passed.
+   Interview note: BEM (Block__Element--Modifier) is a CSS naming convention
+   for predictable, scalable class names. */
+.traffic-light-container--vertical {
+  flex-direction: column;  /* Stack lights top-to-bottom (Red → Yellow → Green) */
+}
+
+/* ============================================================
+   INDIVIDUAL LIGHT BULB
+   ============================================================ */
+
+/* Each light bulb is a circle created purely with CSS.
+   --size is a CSS Custom Property (CSS Variable) scoped to this element.
+   Using var(--size) for both width, height, and border-radius ensures
+   the circle stays perfectly round regardless of the size value.
+
+   Interview note: CSS Custom Properties (--var) are:
+   - Defined with double dash prefix: --size: 50px
+   - Read with var(): border-radius: var(--size)
+   - Scoped to the element and its descendants
+   - Can be overridden per instance (useful for theming)
+
+   The default background-color: #555 is the "off" / unlit state of the bulb.
+   When a bulb is active, inline styles in React override this with the real color. */
+.traffic-light {
+  --size: 50px;                    /* CSS Variable: controls the bulb diameter */
+  background-color: #555;          /* Dark grey = unlit / inactive bulb state */
+  border-radius: var(--size);      /* 50px radius on a 50px element = perfect circle */
+  height: var(--size);             /* Height equals --size */
+  width: var(--size);              /* Width equals --size → square base for the circle */
+}
