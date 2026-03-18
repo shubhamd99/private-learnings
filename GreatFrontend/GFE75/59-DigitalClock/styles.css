@@ -1,0 +1,117 @@
+/* Basic page font */
+body {
+  font-family: sans-serif;
+}
+
+/* ── Wrapper ──────────────────────────────────────────────────────────────────
+   Centers the clock horizontally and vertically on the page.
+   flex + align-items + justify-content is the classic "center everything" combo.
+   ──────────────────────────────────────────────────────────────────────────── */
+.wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ── Clock container ──────────────────────────────────────────────────────────
+   The dark box that holds all digits and separators.
+
+   CSS Custom Properties (variables) are defined here so that all children
+   can reference them with var(). Changing one variable updates every segment.
+
+   --segment-width : how thick each border/segment line is
+   --segment-size  : width & height of each digit square
+   --segment-color : lit-segment colour (white here)
+   ──────────────────────────────────────────────────────────────────────────── */
+.clock {
+  --segment-width: 10px;
+  --segment-size: 40px;
+  --segment-color: #fff;
+
+  background-color: #000;          /* classic black digital display background */
+  border: 10px solid #ccc;         /* light-grey casing around the clock */
+  border-radius: 10px;             /* rounded corners on the casing */
+  display: flex;                   /* lay digits + separators in a row */
+  gap: 10px;                       /* space between each digit column */
+  padding: 20px;                   /* inner breathing room */
+}
+
+/* ── Digit square (base) ──────────────────────────────────────────────────────
+   Both the top and bottom halves of a digit share this base style.
+   The key idea: ALL four borders are set to `transparent` by default.
+   Modifier classes (below) then selectively colour individual borders to
+   simulate a 7-segment display.
+
+   border-style: solid  → needed so the border actually takes up space even
+                           when transparent (otherwise width:0).
+   box-sizing: border-box → borders are included inside the declared size,
+                             so width/height stay predictable.
+   ──────────────────────────────────────────────────────────────────────────── */
+.digit-square {
+  border-style: solid;
+  border-color: transparent;          /* all sides off (dark) by default */
+  border-width: var(--segment-width); /* uniform thickness from variable */
+  box-sizing: border-box;
+  height: var(--segment-size);
+  width: var(--segment-size);
+}
+
+/* ── Top half adjustment ──────────────────────────────────────────────────────
+   The bottom border of the TOP square is the visual "middle bar" of the digit.
+   We halve it so the middle bar looks proportionally thinner than the outer edges.
+   ──────────────────────────────────────────────────────────────────────────── */
+.digit-square-top {
+  border-bottom-width: calc(var(--segment-width) / 2);
+}
+
+/* ── Bottom half adjustment ───────────────────────────────────────────────────
+   Mirror of the above: the top border of the BOTTOM square is also the middle bar.
+   Halving both ensures the middle bar stays the same visual weight.
+   ──────────────────────────────────────────────────────────────────────────── */
+.digit-square-bottom {
+  border-top-width: calc(var(--segment-width) / 2);
+}
+
+/* ── Segment colour modifiers ─────────────────────────────────────────────────
+   These classes "light up" an individual border by colouring it.
+   They are dynamically added/removed in JS via NUMBER_TO_CLASSES.
+   No class → border stays transparent (off).
+   ──────────────────────────────────────────────────────────────────────────── */
+.digit-square-border-top {
+  border-top-color: var(--segment-color);
+}
+
+.digit-square-border-left {
+  border-left-color: var(--segment-color);
+}
+
+.digit-square-border-right {
+  border-right-color: var(--segment-color);
+}
+
+.digit-square-border-bottom {
+  border-bottom-color: var(--segment-color);
+}
+
+/* ── Separator (the colon ":" between hours/minutes/seconds) ──────────────────
+   A flex column that evenly spaces its two dot children vertically,
+   giving the appearance of a colon centred beside the digits.
+   ──────────────────────────────────────────────────────────────────────────── */
+.separator {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-evenly; /* push dots to top-third and bottom-third */
+}
+
+/* ── Separator dot ────────────────────────────────────────────────────────────
+   A small square made circular via border-radius.
+   Uses --segment-width for both size and radius, so it's always a perfect circle
+   and scales with the rest of the display if you change the variable.
+   ──────────────────────────────────────────────────────────────────────────── */
+.separator-dot {
+  background-color: var(--segment-color); /* same white as lit segments */
+  border-radius: var(--segment-width);    /* 50% of width = circle */
+  height: var(--segment-width);
+  width: var(--segment-width);
+}
