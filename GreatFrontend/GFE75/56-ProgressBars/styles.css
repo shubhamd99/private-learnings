@@ -1,0 +1,112 @@
+/* ============================================================
+   Progress Bars — GFE75 #56
+   Concept: CSS Transitions + transform: scaleX() animation
+   Used to animate a progress bar from 0% → 100% width
+   ============================================================ */
+
+/* Base font for the whole page */
+body {
+  font-family: sans-serif;
+}
+
+/* ============================================================
+   .wrapper
+   - Outermost container for the entire app
+   - Uses flex column layout to stack the "Add" button
+     and the bars list vertically
+   - gap: 16px creates breathing room between children
+   - justify-content: center would center children along
+     the main axis (column = vertical here)
+   ============================================================ */
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 16px; /* shorthand for row-gap + column-gap */
+  justify-content: center; /* centers children vertically (flex-direction: column) */
+}
+
+/* ============================================================
+   .bars
+   - Container that holds all the individual progress bars
+   - flex + column layout stacks each bar one below another
+   - row-gap: 8px adds vertical spacing between bars
+     (use row-gap when only vertical gap is needed)
+   ============================================================ */
+.bars {
+  display: flex;
+  flex-direction: column;
+  row-gap: 8px; /* gap only between rows (vertical); no horizontal gap needed here */
+}
+
+/* ============================================================
+   .bar
+   - The grey "track" of each progress bar (the background rail)
+   - height: 8px gives it a thin, typical progress bar look
+   - background-color: #ccc is the unfilled/empty portion
+   - overflow is NOT explicitly set here, but .bar-contents
+     uses transform (not width), so clipping isn't required
+   ============================================================ */
+.bar {
+  background-color: #ccc; /* light grey — represents the empty track */
+  height: 8px;
+}
+
+/* ============================================================
+   .bar-contents
+   - The GREEN "fill" inside the grey track
+   - height: 100% stretches to match .bar's 8px height
+
+   KEY TECHNIQUE — transform: scaleX() instead of width animation:
+   ---------------------------------------------------------------
+   ✅ WHY scaleX over `width`:
+     - Animating `width` triggers Layout + Paint (expensive)
+     - Animating `transform` only triggers Composite (GPU-accelerated, cheap)
+     - This is a critical performance interview talking point
+
+   - transform: scaleX(0)  → visually collapses the element to 0 width
+   - transform-origin: left → makes the scale expand from the LEFT edge
+     (default origin is center; without this, it would grow from the center)
+
+   TRANSITION properties:
+   - transition-property: transform  → only animate the transform property
+   - transition-duration: 2000ms     → animation takes exactly 2 seconds
+   - transition-timing-function: linear → constant speed (no ease in/out)
+     (common alternatives: ease, ease-in, ease-out, cubic-bezier())
+   ============================================================ */
+.bar-contents {
+  background-color: green; /* the filled/progress color */
+  height: 100%; /* fills the full height of .bar */
+
+  /* Initial state: bar is invisible (scaled to 0 on X axis) */
+  transform: scaleX(0);
+
+  /* Anchor the scale to start from the LEFT side */
+  transform-origin: left;
+
+  /* Only animate the `transform` property — avoids animating layout properties */
+  transition-property: transform;
+
+  /* Animation duration: 2 seconds (matches the GFE requirement) */
+  transition-duration: 2000ms;
+
+  /* Constant speed: no acceleration or deceleration */
+  transition-timing-function: linear;
+}
+
+/* ============================================================
+   .bar-contents--filled   (BEM modifier class)
+   - Applied dynamically via JS/React once the component mounts
+   - Triggers the CSS transition by changing scaleX from 0 → 1
+   - scaleX(1) = full width (100% of parent .bar)
+
+   HOW THE ANIMATION WORKS (Interview Explanation):
+   -------------------------------------------------
+   1. Component mounts → .bar-contents has scaleX(0) → invisible
+   2. After first render, React adds .bar-contents--filled class
+   3. scaleX changes from 0 → 1 → CSS transition kicks in
+   4. The transition animates the change over 2000ms linearly
+   5. Result: smooth left-to-right fill animation
+   ============================================================ */
+.bar-contents--filled {
+  transform: scaleX(1); /* fully expanded = bar appears 100% filled */
+}
