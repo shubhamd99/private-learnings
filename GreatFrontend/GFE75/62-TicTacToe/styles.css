@@ -1,0 +1,135 @@
+/* ─────────────────────────────────────────────
+   BASE: body
+   Resets the default browser serif font to a
+   clean sans-serif stack across the whole page.
+───────────────────────────────────────────── */
+body {
+  /* Use a system sans-serif so text is crisp on
+     all platforms (no Google Fonts needed). */
+  font-family: sans-serif;
+}
+
+/* ─────────────────────────────────────────────
+   LAYOUT: .app (root container)
+   Centers the entire game — heading, board, and
+   status — vertically and horizontally on the
+   page, capped at a sensible max-width.
+───────────────────────────────────────────── */
+.app {
+  /* Flexbox chosen over grid because children
+     stack in a single column (1-D layout). */
+  display: flex;
+
+  /* Cross-axis: horizontally center each child
+     (heading, board, status text). */
+  align-items: center;
+
+  /* Main-axis: horizontally center the flex
+     container itself inside the viewport. */
+  justify-content: center;
+
+  /* Stack children top-to-bottom instead of
+     the default left-to-right row direction. */
+  flex-direction: column;
+
+  /* Prevent the game from stretching too wide
+     on large screens — keeps it compact. */
+  max-width: 320px;
+
+  /* Classic centering trick: auto left/right
+     margins push the block element to the middle. */
+  margin: 0 auto;
+
+  /* Adds vertical breathing room between the
+     heading, board, and status text without
+     adding bottom margin to the last child. */
+  row-gap: 16px;
+}
+
+/* ─────────────────────────────────────────────
+   LAYOUT: .board (3×3 grid)
+   Arranges the 9 cell buttons into an equal-
+   width 3-column grid that fills the container.
+───────────────────────────────────────────── */
+.board {
+  /* CSS Grid is the natural fit for a 2-D,
+     equal-cell layout like a game board. */
+  display: grid;
+
+  /* Stretch the grid to fill the .app container
+     so column sizing math is predictable. */
+  width: 100%;
+
+  /* repeat(3, 1fr) → 3 columns, each taking an
+     equal fraction of the available width.
+     "1fr" means "1 unit of free space". */
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* ─────────────────────────────────────────────
+   COMPONENT: .cell (individual square button)
+   Styles each of the 9 clickable squares:
+   background, border, typography, and shape.
+───────────────────────────────────────────── */
+.cell {
+  /* White background so X/O marks are readable
+     and contrast well against the border. */
+  background-color: #fff;
+
+  /* Thin grey border around every cell.
+     Because the grid is borderless, adjacent
+     cells share borders to form the grid lines. */
+  border: 1px solid #ccc;
+
+  /* Explicit black text so the mark color is
+     consistent regardless of inherited color. */
+  color: #000;
+
+  /* Responsive font size:
+     - min() picks the smaller of the two values.
+     - 48px is the upper cap on large screens.
+     - 10vw scales with viewport width on mobile
+       so marks never overflow the cell. */
+  font-size: min(48px, 10vw);
+
+  /* Bold weight makes X and O visually dominant
+     inside the small cell area. */
+  font-weight: bold;
+
+  /* Vertically centers inline/inline-block
+     content (the text mark) within the button.
+     Works alongside the button's default
+     display:inline-flex behavior in some browsers. */
+  vertical-align: middle;
+
+  /* Keeps every cell perfectly square regardless
+     of viewport width by locking width:height = 1:1.
+     Because width is driven by 1fr, height
+     automatically matches it. */
+  aspect-ratio: 1 / 1;
+}
+
+/* ─────────────────────────────────────────────
+   STATE: .cell:not(:disabled)
+   Applies only to cells that are still clickable
+   (i.e., the square hasn't been claimed yet and
+   the game isn't over).
+───────────────────────────────────────────── */
+.cell:not(:disabled) {
+  /* Switch from the default arrow cursor to a
+     pointer, signaling the cell is interactive. */
+  cursor: pointer;
+}
+
+/* ─────────────────────────────────────────────
+   STATE: .cell:not(:disabled):hover
+   Visual feedback when the user hovers over an
+   empty, playable cell — keeps disabled cells
+   from reacting to hover.
+───────────────────────────────────────────── */
+.cell:not(:disabled):hover {
+  /* Very subtle off-white (#fafafa vs #fff)
+     gives a clear hover indication without
+     being distracting or changing the layout. */
+  background-color: #fafafa;
+}
