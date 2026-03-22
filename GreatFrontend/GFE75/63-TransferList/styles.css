@@ -1,0 +1,64 @@
+body {
+  /* Set a clean sans-serif font for better readability across all UI elements */
+  font-family: sans-serif;
+}
+
+ul {
+  /* Remove default bullet points to create a cleaner list appearance */
+  list-style-type: none;
+  /* Reset default indentation to ensure lists align with their parent container */
+  padding-left: 0;
+}
+
+.transfer-list {
+  /* Add a subtle border to clearly define the component's boundaries */
+  border: 1px solid #ccc;
+  /* Use flexbox to horizontally arrange the left and right list sections */
+  display: flex;
+  /* Limit the component's width for better layout on larger screens */
+  max-width: 768px;
+  /* Center the component horizontally within its parent container */
+  margin: 0 auto;
+}
+
+.transfer-list__section {
+  /* Add internal spacing for better content separation */
+  padding: 20px;
+  /* Allow both sections to expand and occupy equal available horizontal space */
+  flex-grow: 1;
+}
+
+.transfer-list__section__items {
+  /* Use flexbox to stack items vertically (column layout) */
+  display: flex;
+  /* Define the stacking direction explicitly as a column */
+  flex-direction: column;
+  /* Provide consistent vertical spacing between items for visual separation */
+  row-gap: 12px;
+}
+
+.transfer-list__section__items__item {
+  /* Use flexbox for horizontal alignment of the checkbox and its label */
+  display: flex;
+  /* Add horizontal spacing between the checkbox and the label for clarity */
+  gap: 8px;
+}
+
+.transfer-list__actions {
+  /* Border color for the middle section consistent with the outer border */
+  border-color: #ccc;
+  /* Only add borders on the left and right to separate it from the two list sections */
+  border-width: 0 1px 0 1px;
+  /* Apply solid line style for the borders */
+  border-style: solid;
+  /* Vertically center the action buttons within the container */
+  align-items: center;
+  /* Use flexbox to arrange action buttons vertically */
+  display: flex;
+  /* Ensure the buttons are stacked on top of each other */
+  flex-direction: column;
+  /* Provide uniform internal spacing for the action section */
+  padding: 20px;
+  /* Add consistent vertical spacing between individual action buttons */
+  row-gap: 12px;
+}
