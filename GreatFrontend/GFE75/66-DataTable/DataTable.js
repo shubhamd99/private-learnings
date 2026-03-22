@@ -27,8 +27,24 @@ function paginateUsers(usersList, page, pageSize) {
 export default function DataTable() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(5);
+  // State to manage the sorting order ('asc', 'desc', or null)
+  const [sortOrder, setSortOrder] = useState(null);
 
-  const { totalPages, pageUsers } = paginateUsers(users, page, pageSize);
+  const { totalPages, pageUsers: initialPageUsers } = paginateUsers(
+    users,
+    page,
+    pageSize,
+  );
+
+  // Sorting logic now only applies to the visible data on the current page
+  const pageUsers = [...initialPageUsers].sort((a, b) => {
+    if (sortOrder === "asc") {
+      return a.name.localeCompare(b.name);
+    } else if (sortOrder === "desc") {
+      return b.name.localeCompare(a.name);
+    }
+    return 0; // Default: no sorting
+  });
 
   return (
     <div>
@@ -36,7 +52,24 @@ export default function DataTable() {
         <thead>
           <tr>
             {columns.map(({ label, key }) => (
-              <th key={key}>{label}</th>
+              <th key={key}>
+                {key === "name" ? (
+                  <button
+                    onClick={() => {
+                      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+                    }}
+                  >
+                    {label}{" "}
+                    {sortOrder === "asc"
+                      ? "🔼"
+                      : sortOrder === "desc"
+                        ? "🔽"
+                        : "↕️"}
+                  </button>
+                ) : (
+                  label
+                )}
+              </th>
             ))}
           </tr>
         </thead>
