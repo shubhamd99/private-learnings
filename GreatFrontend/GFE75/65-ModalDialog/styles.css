@@ -1,0 +1,44 @@
+body {
+  /* Use a clean, sans-serif font for better readability */
+  font-family: sans-serif;
+}
+
+.modal-overlay {
+  /* Semi-transparent black background to dim the rest of the UI and focus on the modal */
+  background-color: rgba(0, 0, 0, 0.7);
+  /* Absolute positioning relative to the viewport to cover the entire screen
+  The CSS inset: 0 property is a shorthand that sets top, right, bottom, and left to 0 */
+  inset: 0;
+  /* Fixes the overlay in place even if the user scrolls the background */
+  position: fixed;
+
+  /* Flexbox centering: perfectly center the modal box horizontally and vertically */
+  align-items: center;
+  display: flex;
+  justify-content: center;
+
+  /* Ensure the modal doesn't touch screen edges on small devices */
+  padding: 20px;
+}
+
+.modal {
+  /* Column layout for modal header, body, and footer */
+  display: flex;
+  flex-direction: column;
+  /* Distribute vertical space between elements */
+  justify-content: space-between;
+  /* Center items horizontally */
+  align-items: center;
+  /* Modern way to add spacing between child elements without side-effects */
+  gap: 16px;
+
+  /* Standard modal white background */
+  background-color: white;
+  /* Comfortable internal padding */
+  padding: 24px;
+}
+
+.modal-title {
+  /* Remove default heading margins to maintain layout control via parent gap */
+  margin: 0;
+}

@@ -1,0 +1,55 @@
+body {
+  /* Sets the default font for the entire page to a clean sans-serif typeface */
+  font-family: sans-serif;
+}
+
+table {
+  /* Combines adjacent cell borders into a single border for a cleaner look */
+  border-collapse: collapse;
+  /* Sets the base font size for the table content */
+  font-size: 14px;
+}
+
+td,
+th {
+  /* Adds spacing inside the table cells for better readability */
+  padding: 4px;
+  /* Creates a subtle horizontal line between table rows for separation */
+  border-bottom: 1px solid #ddd;
+  /* Aligns text to the start (left for LTR languages) */
+  text-align: start;
+}
+
+th {
+  /* Aligns the content of the header cells to the top */
+  vertical-align: top;
+}
+
+th button {
+  /* Removes the default background of the button to make it look like plain text */
+  background: none;
+  /* Removes the default border from the button */
+  border: none;
+  /* Changes the mouse pointer to a hand icon when hovering, indicating it's clickable */
+  cursor: pointer;
+  /* Removes default padding to ensure the button fits perfectly within the 'th' */
+  padding: 0;
+}
+
+.pagination {
+  /* Uses Flexbox for easy horizontal layout of pagination elements */
+  display: flex;
+  /* Consistent font size with the table */
+  font-size: 14px;
+  /* Adds spacing between the flex items (Back, pages, Forward) */
+  gap: 12px;
+}
+
+.pages {
+  /* Inline-flex allows the container to only take up as much width as its content while behaving like a flex container */
+  display: inline-flex;
+  /* Center-aligns the page numbers vertically within the container */
+  align-items: center;
+  /* Spacing between individual page number items */
+  gap: 8px;
+}
