@@ -1,0 +1,42 @@
+body {
+  font-family: sans-serif;
+}
+
+table {
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+td,
+th {
+  padding: 8px;
+  border-bottom: 1px solid #ddd;
+  text-align: start;
+}
+
+th button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-weight: bold;
+}
+
+.pagination {
+  display: flex;
+  font-size: 14px;
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.pages {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loading, .error {
+  padding: 20px 0;
+  font-style: italic;
+  color: #666;
+}
