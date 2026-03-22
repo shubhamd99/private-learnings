@@ -90,11 +90,17 @@ cleanList[0].toLowerCase(); // Safe!
 // -----------------------------------------------------------------------------------
 // AS (Type Assertion)
 
-const value: any = "Hello";
+const castValue: any = "Hello";
 
 // You force TS to treat it as a number
-const length2 = (value as number).toFixed(2);
+const length_as = (castValue as number).toFixed(2);
 
 // RUNTIME ERROR!
 // "value.toFixed is not a function"
 // (because 'value' is actually a string)
+
+// -----------------------------------------------------------------------------------
+
+// Angle-bracket syntax (Alternative casting)
+// NOTE: Not usable in .tsx files (JSX)
+const length_angle = (<string>castValue).length;
