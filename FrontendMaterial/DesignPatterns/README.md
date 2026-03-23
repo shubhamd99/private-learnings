@@ -55,7 +55,55 @@ Examples:
 - Template Method
 - Interpreter
 
-## List of Design Patterns
+---
+
+## 🎯 Interview Prep: The Decision Tree
+*Stop memorizing—think about the **pain point** you are trying to solve.*  
+*(Source: [Stop Memorizing Design Patterns - Medium](https://medium.com/womenintechnology/stop-memorizing-design-patterns-use-this-decision-tree-instead-e84f22fca9fa))*
+
+### 🛠️ Creational: "Object creation is getting messy"
+*   **Is it a single global instance?** → **Singleton** (e.g., Logger, Config).
+*   **Is setup complex with many optional params?** → **Builder** (e.g., API Request config).
+*   **Choosing implementation based on context?**
+    *   Single product? → **Factory Method** (e.g., Button vs. Input based on type).
+    *   Family of related items? → **Abstract Factory** (e.g., Theme: Button + Card + Input).
+*   **Cheaper to clone existing object?** → **Prototype**.
+
+### 🏗️ Structural: "How do things fit/communicate?"
+*   **Incompatible interfaces?** → **Adapter** (e.g., Wrapping a legacy API to modern standards).
+*   **Subsystem too complex?** → **Facade** (e.g., A single `AuthService` hiding JWT, Cookies, and OAuth).
+*   **Add features without subclass explosion?** → **Decorator** (e.g., `withLogging(fetcher)`, `withRetry(fetcher)`).
+*   **Standing in for an object (lazy loading)?** → **Proxy**.
+*   **Tree/Hierarchy structure?** → **Composite** (e.g., File system, UI Component tree).
+*   **Two dimensions of change?** → **Bridge** (e.g., `Shape` vs. `Color`).
+
+### ⚙️ Behavioral: "How do things behave/change?"
+*   **Sequence of steps?** → **Chain of Responsibility** (e.g., Middleware, Interceptors).
+*   **Queue, Undo, or Log actions?** → **Command** (e.g., Redux Actions, Undo/Redo stack).
+*   **Swap algorithms at runtime?** → **Strategy** (e.g., Payment methods: Stipe, PayPal, Crypto).
+*   **Behavior changes with state?** → **State** (e.g., Loading → Success → Error states).
+*   **Broadcasting updates?** → **Observer** (e.g., Pub/Sub, React context).
+*   **Coordinate between objects?** → **Mediator** (e.g., Form Manager).
+
+---
+
+## 🚀 Real-World Scenarios (Quick Examples)
+
+1.  **Notification Delivery (Email/SMS/Push):**
+    *   **Problem:** If-else branches grow as you add more channels.
+    *   **Solution:** **Strategy**. Define a `Sender` interface; swap at runtime based on user preference.
+
+2.  **API Request Processing (Rate Limit → Auth → Logging):**
+    *   **Problem:** Logic is tangled and order-dependent.
+    *   **Solution:** **Chain of Responsibility**. Each check is a standalone handler in a pipeline.
+
+3.  **Complex Report Generation (PDF/CSV with custom filters):**
+    *   **Problem:** Huge constructors and logic duplication for formats.
+    *   **Solution:** **Builder** for config + **Strategy** for formatting engine.
+
+---
+
+## 📋 List of Design Patterns
 
 ### Singleton (Creational)
 
