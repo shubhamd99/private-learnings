@@ -1,0 +1,28 @@
+.tabs {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+}
+
+.tabs-list {
+  display: flex;
+  border-bottom: 1px solid #ccc;
+}
+
+.tabs-list-item {
+  padding: 8px 16px;
+  cursor: pointer;
+  border: none;
+  background: none;
+  font-size: 16px;
+}
+
+.tabs-list-item--active {
+  border-bottom: 2px solid blue;
+  color: blue;
+  font-weight: bold;
+}
+
+.tabs-panel {
+  padding: 16px;
+}
