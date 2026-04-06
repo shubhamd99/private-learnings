@@ -25,3 +25,24 @@ export default function debounce(func, wait) {
     }, wait);
   };
 }
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: every time the function is called, reset the timer.
+// Only fire when the timer finally runs out (user stopped calling it).
+
+function debounceSimple(func, wait) {
+  let timer;
+
+  return function (...args) {
+    // Cancel the previous timer (if user called again before wait ended)
+    clearTimeout(timer);
+
+    // Start a fresh timer — fire func only after `wait` ms of silence
+    // Use apply to pass `this` context so it works correctly as a method
+    const context = this;
+    timer = setTimeout(() => {
+      func.apply(context, args);
+      // func(...args);
+    }, wait);
+  };
+}

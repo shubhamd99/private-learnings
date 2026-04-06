@@ -29,3 +29,27 @@ Array.prototype.myReduce = function (callbackFn, initialValue) {
 
   return accumulator;
 };
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: walk through the array, accumulating a single result.
+// If no initialValue given, use the first element and start from index 1.
+
+Array.prototype.myReduce = function (callbackFn, initialValue) {
+  const array = this;
+
+  // If no initialValue, kick off with the first element
+  let accumulator = initialValue !== undefined ? initialValue : array[0];
+  let startIndex = initialValue !== undefined ? 0 : 1;
+
+  // throw if array is empty and no initialValue was provided
+  if (array.length === 0 && initialValue === undefined) {
+    throw new TypeError("Reduce of empty array with no initial value");
+  }
+
+  for (let i = startIndex; i < array.length; i++) {
+    // callbackFn receives: accumulated result, current item, index, full array
+    accumulator = callbackFn(accumulator, array[i], i, array);
+  }
+
+  return accumulator;
+};

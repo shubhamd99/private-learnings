@@ -1,6 +1,10 @@
 // Time Complexity: O(n) -> where n is the number of elements in the array
 // Space Complexity: O(n) -> due to recursion stack
 
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: loop through each item — if it's an array, recurse into it.
+// If it's a plain value, push it into the result.
+
 /**
  * @param {Array<*|Array>} value -> array with nested arrays
  * @return {Array} -> flattened array
@@ -10,11 +14,12 @@ export default function flatten(value) {
 
   for (const item of value) {
     if (Array.isArray(item)) {
-      //  JavaScript engines have a hard limit on the number of arguments a function can take (safely around ~65,000)
-      // result.push(...flatten(item));
+      // Item is a nested array — flatten it recursively and merge into result
+      // concat is safer than push(...) which can hit JS arg limits on large arrays
       // concat creates a new array, safely combining them
       result = result.concat(flatten(item));
     } else {
+      // Item is a plain value — add it as-is
       result.push(item);
     }
   }
@@ -57,8 +62,12 @@ function flatten4(value) {
 function* flatten5(value) {
   for (const item of value) {
     if (Array.isArray(item)) {
+      // yield* is used to delegate to another generator function
+      // it yields all values from the nested generator
       yield* flatten5(item);
     } else {
+      // yield is used to yield a value from the generator
+      // it yields the value to the caller
       yield item;
     }
   }

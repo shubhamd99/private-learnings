@@ -68,3 +68,33 @@ function throttle2(func, wait) {
 // Example usage:
 // const throttledFunc = throttle(myFunction, 1000);
 // throttledFunc();
+
+// ---- SIMPLE VERSION (for interviews) ----
+// This is LEADING EDGE throttle — fires immediately on the first call,
+// then ignores all calls for `wait` ms, then allows again.
+//
+// TRAILING EDGE would be the opposite — ignore the first call,
+// fire once at the END of the wait window (like debounce but on an interval).
+//
+// Throttle vs Debounce:
+//   Debounce  — wait for the user to STOP calling, then fire once
+//   Throttle  — fire immediately, then IGNORE calls for a fixed period
+
+function throttleSimple(func, wait) {
+  let isThrottled = false;
+
+  return function (...args) {
+    // If we're in the cooldown window, ignore the call
+    if (isThrottled) return;
+
+    // Fire immediately — pass `this` context so it works as a method too
+    func.apply(this, args);
+    // func(...args);
+
+    // Block any further calls for `wait` ms
+    isThrottled = true;
+    setTimeout(() => {
+      isThrottled = false;
+    }, wait);
+  };
+}

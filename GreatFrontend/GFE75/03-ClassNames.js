@@ -47,3 +47,35 @@ export default function classNames(...args) {
 
   return classes.join(" ");
 }
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: loop through each argument — 4 cases to handle:
+//   1. falsy      → skip it
+//   2. string/number → add directly
+//   3. array      → recurse into it
+//   4. object     → add keys whose value is truthy
+
+function classNamesSimple(...args) {
+  const classes = [];
+
+  for (const arg of args) {
+    // 1. Skip falsy values (null, undefined, false, 0, "")
+    if (!arg) continue;
+
+    if (typeof arg === "string" || typeof arg === "number") {
+      // 2. Strings and numbers go straight in
+      classes.push(arg);
+    } else if (Array.isArray(arg)) {
+      // 3. Arrays: flatten by recursing, then add the result
+      classes.push(classNamesSimple(...arg));
+    } else if (typeof arg === "object") {
+      // 4. Objects: only add the key if it's the object's own key (not inherited) and value is truthy
+      // Object.hasOwn guards against for...in picking up inherited prototype properties
+      for (const key in arg) {
+        if (Object.hasOwn(arg, key) && arg[key]) classes.push(key);
+      }
+    }
+  }
+
+  return classes.join(" ");
+}
