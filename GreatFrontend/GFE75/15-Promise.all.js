@@ -12,18 +12,17 @@ export default function promiseAll(promises) {
     }
 
     promises.forEach((promise, index) => {
-      Promise.resolve(promise) // handle non-promise values too
+      Promise.resolve(promise) // Promise.resolve handles both Promises and static values
         .then((value) => {
           results[index] = value; // store result in correct order
           completed += 1;
 
+          // Once all are finished, resolve the full array
           if (completed === promises.length) {
-            resolve(results); // all promises resolved successfully
+            resolve(results);
           }
         })
-        .catch((err) => {
-          reject(err); // any failure → reject immediately
-        });
+        .catch(reject); // Short-circuit on first error
     });
   });
 }

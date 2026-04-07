@@ -1,15 +1,15 @@
+// Alternative to isArray.
+// export function isArrayAlt(value) {
+//   // For null and undefined.
+//   if (value == null) {
+//     return false;
+//   }
+
+//   return value.constructor === Array;
+// }
+
 export function isArray(value) {
   return Array.isArray(value);
-}
-
-// Alternative to isArray.
-export function isArrayAlt(value) {
-  // For null and undefined.
-  if (value == null) {
-    return false;
-  }
-
-  return value.constructor === Array;
 }
 
 export function isFunction(value) {
@@ -22,8 +22,7 @@ export function isObject(value) {
     return false;
   }
 
-  const type = typeof value;
-  return type === "object" || type === "function";
+  return typeof value === "object" || typeof value === "function";
 }
 
 export function isPlainObject(value) {
@@ -32,6 +31,14 @@ export function isPlainObject(value) {
     return false;
   }
 
+  // Ensures it’s not an instance of a class (like new Date()) or an Array.
   const prototype = Object.getPrototypeOf(value);
-  return prototype === null || prototype === Object.prototype;
+
+  // covers Object.create(null) (object with no prototype at all)
+  if (prototype === null) {
+    return false;
+  }
+
+  // covers {} and new Object()
+  return prototype === Object.prototype;
 }
