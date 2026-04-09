@@ -54,3 +54,29 @@ export default function mergeData(sessions) {
     equipment: Array.from(sessions.equipment).sort(), // sort alphabetically
   }));
 }
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: loop through sessions — if user already seen, accumulate duration and
+// merge equipment into a Set. Otherwise, add a new entry to the Map.
+export default function mergeData(sessions) {
+  // Map keyed by user id — insertion order preserved (like an ordered dict)
+  const map = new Map();
+
+  for (const { user, duration, equipment } of sessions) {
+    if (map.has(user)) {
+      const s = map.get(user);
+      s.duration += duration; // accumulate total duration
+      equipment.forEach((e) => s.equipment.add(e)); // Set deduplicates equipment
+    } else {
+      // First occurrence: store a new entry with a Set for equipment
+      map.set(user, { user, duration, equipment: new Set(equipment) });
+    }
+  }
+
+  // Convert Map values back to array; spread Set → array and sort alphabetically
+  // Array.from(map.values()) gives you just the values
+  return Array.from(map.values()).map((s) => ({
+    ...s,
+    equipment: [...s.equipment].sort(),
+  }));
+}

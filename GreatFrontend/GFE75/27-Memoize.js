@@ -74,3 +74,24 @@ console.log(memoizedExpensiveFunction(10)); // Output: 20
 
 // While this can be accessed without issues, the results are memoized solely on the input arguments,
 // the same memoized result is returned for the same input arguments even if the this value is different between calls.
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: wrap the function in a closure that holds a cache (Map).
+// On each call, serialize args as the key — if hit, return cached result.
+// Otherwise call the function, store the result, then return it.
+//
+// JSON.stringify(args) works for primitive args.
+// Limitation: objects with same content but different references will hit the cache,
+// and functions/undefined/circular refs are not handled by JSON.stringify.
+function memoize(func) {
+  const cache = new Map();
+
+  return function (...args) {
+    const key = JSON.stringify(args); // serialize args array as cache key
+    if (cache.has(key)) return cache.get(key); // cache hit
+
+    const result = func.call(this, ...args); // preserve `this` context
+    cache.set(key, result);
+    return result;
+  };
+}

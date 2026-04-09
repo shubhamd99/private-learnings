@@ -27,3 +27,22 @@ function foo(url, options, callback) {
 
 const promisifiedFoo = promisify(foo);
 const data = await promisifiedFoo("example.com", { foo: 1 });
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: return a wrapper function that, when called, creates a Promise.
+// Append a Node-style callback (err, result) to the original args.
+// The callback rejects on error, resolves on success.
+// Use func.call(this, ...) to preserve the calling context.
+function promisify(func) {
+  return function (...args) {
+    const promise = new Promise((resolve, reject) => {
+      // append the callback as the last argument
+      func.call(this, ...args, (err, result) => {
+        if (err) reject(err);
+        else resolve(result);
+      });
+    });
+
+    return promise;
+  };
+}

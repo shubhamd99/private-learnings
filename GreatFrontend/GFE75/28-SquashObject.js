@@ -75,3 +75,30 @@ const object4 = {
   },
 };
 squashObject(object4); // { foo: 1, 'foo.bar': 2 }
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: recurse through the object, building up a dotted key path.
+// If the value is an object/array, go deeper with the accumulated prefix.
+// If it's a primitive (including null/undefined), write it to the result.
+// Empty string keys are skipped in the path — use prefix directly.
+function squashObject(obj, prefix = "") {
+  const result = {};
+
+  for (const key in obj) {
+    // skip non-own properties
+    if (!Object.hasOwn(obj, key)) continue;
+
+    // skip empty key segment — don't add a stray dot
+    const fullKey = !key ? prefix : prefix ? `${prefix}.${key}` : key;
+    const value = obj[key];
+
+    if (typeof value === "object" && value !== null) {
+      // recurse into nested objects AND arrays (arrays have numeric string keys)
+      Object.assign(result, squashObject(value, fullKey));
+    } else {
+      result[fullKey] = value; // primitive — store at dotted path
+    }
+  }
+
+  return result;
+}

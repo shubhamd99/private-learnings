@@ -57,3 +57,32 @@ export default function deepEqual(valueA, valueB) {
 // Cyclic objects, i.e. objects with circular references are not handled.
 // Property descriptors are not taken into account when comparing properties.
 // Non-enumerable properties and symbol-keyed properties are not compared.
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: handle primitives first with Object.is (covers NaN and +0/-0 edge cases).
+// Then confirm both values are the same type (both arrays or both objects).
+// Check key count, then recurse into each key's value.
+function deepEqual(a, b) {
+  // Object.is handles NaN === NaN (true) and +0 === -0 (false) correctly
+  // It checks if two values are exactly the same — stricter than === in two edge cases.
+  if (Object.is(a, b)) return true;
+
+  // if either is not an object/array (null, primitives), they would've matched above
+  if (typeof a !== "object" || typeof b !== "object") return false;
+  if (a === null || b === null) return false;
+
+  // must be same shape — both arrays or both plain objects
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  // Compare the keys of arrays and objects
+  if (keysA.length !== keysB.length) return false;
+
+  // recurse into every key — if any mismatch, return false early
+  for (const key of keysA) {
+    if (!deepEqual(a[key], b[key])) return false;
+  }
+
+  return true;
+}

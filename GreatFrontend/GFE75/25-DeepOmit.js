@@ -86,3 +86,27 @@ deepOmit(obj, ["b", "c", "e"]); // { a: 1, f: [5, 6] }
 //               → newObj = { a:1, c: { d:4 } }
 
 // return { a:1, c: { d:4 } }
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: three cases — array, plain object, primitive.
+// For arrays: recurse into each item.
+// For objects: skip keys in the omit list, recurse into the rest.
+// For primitives: return as-is.
+function deepOmit(val, keys) {
+  if (Array.isArray(val)) {
+    return val.map((item) => deepOmit(item, keys)); // recurse into each element
+  }
+
+  // typeof null === 'object', so null check is needed
+  if (typeof val === "object" && val !== null) {
+    const result = {};
+    for (const key in val) {
+      if (!keys.includes(key)) {
+        result[key] = deepOmit(val[key], keys); // skip omitted keys, recurse into rest
+      }
+    }
+    return result;
+  }
+
+  return val; // primitive — return as-is
+}

@@ -96,6 +96,49 @@ Inside async function after await: HTTP Response Data
 2. setTimeout callback
 ```
 
+## Promise executor runs synchronously
+
+The function you pass to `new Promise(executor)` runs **immediately and synchronously** — it is not deferred. Only the `.then()` / `.catch()` callbacks are async (microtasks).
+
+```javascript
+console.log("1");
+
+new Promise((resolve) => {
+  console.log("2 — executor runs sync"); // ← runs RIGHT NOW, not later
+  resolve();
+});
+
+console.log("3");
+
+// Output:
+// 1
+// 2 — executor runs sync
+// 3
+```
+
+Why? The executor is just a regular function call inside the `Promise` constructor. JS runs it inline before moving on. Only after `resolve()` is called does the `.then()` callback get scheduled as a **microtask**.
+
+```javascript
+console.log("1");
+
+new Promise((resolve) => {
+  console.log("2 — executor");
+  resolve();
+}).then(() => {
+  console.log("4 — .then is async (microtask)"); // deferred
+});
+
+console.log("3");
+
+// Output:
+// 1
+// 2 — executor
+// 3
+// 4 — .then is async (microtask)
+```
+
+---
+
 ```
 fetch()  -->  Web API (network layer, no queue involved)
                     |

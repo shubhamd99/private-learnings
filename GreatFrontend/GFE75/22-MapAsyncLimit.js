@@ -138,3 +138,32 @@ async function mapAsyncLimit2(iterable, callbackFn, size = Infinity) {
 //   worker1 DONE
 
 // Promise.all → both done → return results
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: spawn exactly `size` worker coroutines in parallel.
+// Each worker pulls the next item off a shared queue until it's empty.
+// Because workers run concurrently, as soon as one finishes an item it
+// immediately picks up the next — no idle gaps unlike the chunk approach.
+//
+// Key tricks:
+//   iterable.entries() → [[0,A],[1,B],...] preserves original index for result ordering
+//   queue.shift()      → shared mutable queue; workers race to grab items
+//   results[index]     → write at original index so output order matches input
+//   Array.from({length: size}, () => worker()) → spawns N promises at once
+async function mapAsyncLimit(iterable, callbackFn, size = Infinity) {
+  size = Math.min(size, iterable.length);
+  const results = [];
+  const queue = [...iterable.entries()]; // [[0,item], [1,item], ...]
+
+  async function worker() {
+    while (queue.length) {
+      const [index, item] = queue.shift(); // grab next available item
+      results[index] = await callbackFn(item); // store at original index
+    }
+  }
+
+  // spawn min(size, total) workers — each runs concurrently
+  await Promise.all(Array.from({ length: size }, worker));
+
+  return results;
+}

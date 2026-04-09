@@ -86,3 +86,28 @@ listFormat(["Bob", "Ben", "Tim", "Jane", "John"], {
 }); // 'Bob, Ben, Tim and 2 others'
 
 listFormat(["Bob", "Ben", "", "", "John"]); // 'Bob, Ben and John'
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: apply options (unique, sorted, length) in order, then join.
+// For the final join: all items except the last are joined with ", ",
+// then the last item is appended with " and ".
+// If length is set, replace the truncated tail with "X other(s)".
+function listFormat(items, options = {}) {
+  // strip falsy values
+  let list = items.filter(Boolean);
+  if (list.length === 0) return "";
+  if (list.length === 1) return list[0];
+
+  if (options.unique) list = [...new Set(list)];
+  if (options.sorted) list.sort(); // alphabetical order
+
+  // truncate and append "X other(s)" for the hidden items
+  if (options.length > 0 && options.length < list.length) {
+    const shown = list.slice(0, options.length);
+    const remaining = list.length - options.length;
+    return `${shown.join(", ")} and ${remaining} ${remaining > 1 ? "others" : "other"}`;
+  }
+
+  // default: "A, B, C and D"
+  return `${list.slice(0, -1).join(", ")} and ${list[list.length - 1]}`;
+}

@@ -1,5 +1,12 @@
 # System Design: News Feed (Frontend Interview)
 
+The RADIO framework is a structured way to answer frontend system design questions.
+R - Requirements
+A - Architecture
+D - Data Model
+I - Interface (API)
+O - Optimizations
+
 > Walk through this order in an interview:
 > Requirements → Architecture → Data Models → APIs → Components → Optimizations → Accessibility
 

@@ -79,3 +79,32 @@ export default function getElementsByClassName(element, classNames) {
 // const el = document.createElement('div'); // DOMTokenList [value: '']
 // el.classList.contains('hello');
 // false
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: DFS through all descendants (not the root element itself).
+// At each node, check if the element's classList contains ALL required classes.
+// Split the input string with /\s+/ to handle multiple spaces between class names.
+// classNames.trim()         // "foo   bar  baz"
+//           .split(/\s+/)   // ["foo", "bar", "baz"]
+function getElementsByClassName(element, classNames) {
+  const result = [];
+  // /\s+/ handles multiple spaces; trim() removes leading/trailing spaces
+  const required = classNames.trim().split(/\s+/);
+
+  function dfs(el) {
+    // el.classList.contains checks the element's DOMTokenList
+    if (required.every((cls) => el.classList.contains(cls))) {
+      result.push(el);
+    }
+    for (const child of el.children) {
+      dfs(child);
+    }
+  }
+
+  // start from children — root element is excluded per spec
+  for (const child of element.children) {
+    dfs(child);
+  }
+
+  return result;
+}

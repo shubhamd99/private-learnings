@@ -171,3 +171,40 @@ class EventEmitter2 {
     return true;
   }
 }
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: store listeners in a Map keyed by event name.
+// on() → push listener into the array for that event.
+// off() → find and remove the first matching listener.
+// emit() → call each listener with the provided args; return false if none exist.
+class EventEmitter {
+  constructor() {
+    this.events = new Map(); // eventName → [listeners]
+  }
+
+  on(eventName, listener) {
+    if (!this.events.has(eventName)) this.events.set(eventName, []);
+    this.events.get(eventName).push(listener);
+    return this;
+  }
+
+  off(eventName, listener) {
+    if (!this.events.has(eventName)) return this;
+    const listeners = this.events.get(eventName);
+    const index = listeners.indexOf(listener); // remove first match only
+    if (index >= 0) listeners.splice(index, 1);
+    // if (listeners.length === 0) this.events.delete(eventName);
+    return this;
+  }
+
+  emit(eventName, ...args) {
+    if (!this.events.has(eventName) || this.events.get(eventName).length === 0)
+      return false;
+    // snapshot to guard against listeners mutating the array mid-emit
+    this.events
+      .get(eventName)
+      .slice()
+      .forEach((fn) => fn(...args));
+    return true;
+  }
+}

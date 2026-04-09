@@ -24,3 +24,18 @@ export default function deepClone(obj) {
 
   return result;
 }
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: if value is a primitive or null, return it as-is.
+// If it's an array, map each item recursively.
+// If it's an object, iterate keys and recurse into each value.
+function deepClone(value) {
+  if (value === null || typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.map(deepClone);
+
+  const clone = {};
+  for (const key in value) {
+    clone[key] = deepClone(value[key]);
+  }
+  return clone;
+}
