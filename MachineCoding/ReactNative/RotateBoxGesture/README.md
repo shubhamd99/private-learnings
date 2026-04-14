@@ -1,97 +1,388 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Drag · Resize · Rotate — React Native Gesture + Undo/Redo
 
-# Getting Started
+Machine Coding Problem (confirmed asked July 2025).
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+> Drag, resize, and rotate a colored box. Undo with a three-finger swipe down. Redo with a two-finger double tap.
 
-## Step 1: Start Metro
+<p align="center">
+  <img src="preview/image-01.png" width="280" alt="App preview" />
+</p>
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+---
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+## Gestures
 
-```sh
-# Using npm
-npm start
+| Gesture                      | Action         |
+| ---------------------------- | -------------- |
+| 1-finger drag                | Move the box   |
+| 2-finger pinch               | Resize the box |
+| 2-finger twist               | Rotate the box |
+| 3-finger swipe down (> 50px) | Undo           |
+| 2-finger double tap          | Redo           |
 
-# OR using Yarn
-yarn start
+---
+
+## Tech Stack
+
+| Package                        | Purpose                                      |
+| ------------------------------ | -------------------------------------------- |
+| `react-native-gesture-handler` | GestureDetector, Pan, Pinch, Rotation, Tap   |
+| `react-native-reanimated`      | useSharedValue, useAnimatedStyle, withSpring |
+| `react-native-worklets`        | scheduleOnRN (worklet → JS thread bridge)    |
+| React `useReducer`             | Undo/redo state stack                        |
+
+---
+
+## Setup
+
+```bash
+npm install
+
+# iOS
+cd ios && bundle exec pod install && cd ..
+npx react-native run-ios
+
+# Android
+npx react-native run-android
 ```
 
-## Step 2: Build and run your app
+> Requires `react-native-worklets/plugin` in `babel.config.js` — already configured.
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+---
 
-### Android
+## Build It Step by Step
 
-```sh
-# Using npm
-npm run android
+### Step 1 — Types (`src/types.ts`)
 
-# OR using Yarn
-yarn android
+Start by modelling what a snapshot of the box looks like, and what the undo stack needs.
+
+```ts
+export interface BoxState {
+  x: number;
+  y: number;
+  scale: number;
+  rotation: number;
+}
+
+export interface AppState {
+  current: BoxState;
+  past: BoxState[];
+  future: BoxState[];
+}
+
+export type Action =
+  | { type: 'PUSH_STATE'; payload: BoxState }
+  | { type: 'UNDO' }
+  | { type: 'REDO' };
 ```
 
-### iOS
+**Mental model:** `current` is now, `past` is the undo stack, `future` is the redo stack.
+Whenever the user commits a gesture, push the old `current` onto `past` and clear `future`.
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+---
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+### Step 2 — Reducer (`src/reducer.ts`)
 
-```sh
-bundle install
+Three actions. The undo/redo reducer is always the same shape — memorise it once.
+
+```
+PUSH_STATE → past.push(current),      current = payload,   future = []
+UNDO       → future.unshift(current), current = past.pop()
+REDO       → past.push(current),      current = future[0], future.shift()
 ```
 
-Then, and every time you update your native dependencies, run:
+```ts
+case 'PUSH_STATE':
+  return { past: [...state.past, state.current], current: action.payload, future: [] };
 
-```sh
-bundle exec pod install
+case 'UNDO': {
+  if (state.past.length === 0) return state;
+  const prev = state.past[state.past.length - 1];
+  return { past: state.past.slice(0, -1), current: prev, future: [state.current, ...state.future] };
+}
+
+case 'REDO': {
+  if (state.future.length === 0) return state;
+  const next = state.future[0];
+  return { past: [...state.past, state.current], current: next, future: state.future.slice(1) };
+}
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+> Wrap `UNDO`/`REDO` case bodies in `{}` — required when declaring `const` inside a `switch` case;
+> without braces TypeScript/ESLint flags a lexical declaration error.
 
-```sh
-# Using npm
-npm run ios
+---
 
-# OR using Yarn
-yarn ios
+### Step 3 — Shared Values
+
+Two groups of shared values live on the UI thread:
+
+```ts
+// The box's current animated position
+const translateX = useSharedValue(0);
+const translateY = useSharedValue(0);
+const scale = useSharedValue(1);
+const rotation = useSharedValue(0);
+
+// Snapshot captured at gesture start (onBegin), read in onUpdate
+const baseX = useSharedValue(0);
+const baseY = useSharedValue(0);
+const baseScale = useSharedValue(1);
+const baseRotation = useSharedValue(0);
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+The `base*` values answer: _"where was the box when this gesture started?"_
+Without them, each `onUpdate` would add delta from 0 instead of from the box's actual position.
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+---
 
-## Step 3: Modify your app
+### Step 4 — Undo/Redo Sync (`useEffect`)
 
-Now that you have successfully run the app, let's make changes!
+When the React state changes (after undo or redo), spring the animated values back to the saved snapshot:
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+```ts
+useEffect(() => {
+  const { x, y, scale: s, rotation: r } = state.current;
+  translateX.value = withSpring(x);
+  translateY.value = withSpring(y);
+  scale.value = withSpring(s);
+  rotation.value = withSpring(r);
+}, [state, translateX, translateY, scale, rotation]);
+```
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+> Shared values from Reanimated are stable references — they never change identity, so including
+> them in deps is safe and satisfies the `react-hooks/exhaustive-deps` rule without causing extra re-runs.
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+---
 
-## Congratulations! :tada:
+### Step 5 — The `commit()` Worklet
 
-You've successfully run and modified your React Native App. :partying_face:
+All three gesture `onEnd` handlers need to save the same four values. Extract a worklet helper
+instead of repeating the object literal three times:
 
-### Now what?
+```ts
+const commit = (): BoxState => {
+  'worklet';
+  return {
+    x: translateX.value,
+    y: translateY.value,
+    scale: scale.value,
+    rotation: rotation.value,
+  };
+};
+```
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+Call it on `onEnd`:
 
-# Troubleshooting
+```ts
+scheduleOnRN(saveState, commit());
+```
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
+`scheduleOnRN` runs `saveState` (a plain JS function) on the React Native thread.
+This is the worklet → JS bridge.
 
-# Learn More
+---
 
-To learn more about React Native, take a look at the following resources:
+### Step 6 — Box Gestures (`Gesture.Simultaneous`)
 
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+All three gestures run at the same time. Use `onBegin` to snapshot, `onUpdate` to animate,
+`onEnd` to commit.
+
+```ts
+Gesture.Simultaneous(
+  Gesture.Pan()
+    .onBegin(() => {
+      'worklet';
+      baseX.value = translateX.value;
+      baseY.value = translateY.value;
+    })
+    .onUpdate(e => {
+      'worklet';
+      translateX.value = baseX.value + e.translationX;
+      translateY.value = baseY.value + e.translationY;
+    })
+    .onEnd(() => {
+      'worklet';
+      scheduleOnRN(saveState, commit());
+    }),
+
+  Gesture.Pinch()
+    .onBegin(() => {
+      'worklet';
+      baseScale.value = scale.value;
+    })
+    .onUpdate(e => {
+      'worklet';
+      scale.value = baseScale.value * e.scale;
+    })
+    .onEnd(() => {
+      'worklet';
+      scheduleOnRN(saveState, commit());
+    }),
+
+  Gesture.Rotation()
+    .onBegin(() => {
+      'worklet';
+      baseRotation.value = rotation.value;
+    })
+    .onUpdate(e => {
+      'worklet';
+      rotation.value = baseRotation.value + e.rotation;
+    })
+    .onEnd(() => {
+      'worklet';
+      scheduleOnRN(saveState, commit());
+    }),
+);
+```
+
+**Key rule:** update shared values on `onUpdate`, dispatch to reducer on `onEnd`.
+Never save state on `onUpdate` — you would push 60 undo entries per second.
+
+---
+
+### Step 7 — Global Gestures (`Gesture.Exclusive`)
+
+Undo/redo gestures wrap the entire screen. `Exclusive` means only one fires at a time.
+
+```ts
+Gesture.Exclusive(
+  Gesture.Pan()
+    .minPointers(3)
+    .onEnd(e => {
+      'worklet';
+      if (e.translationY > 50) scheduleOnRN(undo);
+    }),
+
+  Gesture.Tap()
+    .numberOfTaps(2)
+    .minPointers(2)
+    .onEnd(() => {
+      'worklet';
+      scheduleOnRN(redo);
+    }),
+);
+```
+
+---
+
+### Step 8 — Animated Style
+
+```ts
+const animatedStyle = useAnimatedStyle(() => ({
+  transform: [
+    { translateX: translateX.value },
+    { translateY: translateY.value },
+    { scale: scale.value },
+    { rotate: `${rotation.value}rad` },
+  ],
+}));
+```
+
+> No `'worklet'` directive needed — `useAnimatedStyle` is auto-workletized by Reanimated v4.
+
+---
+
+### Step 9 — JSX Tree
+
+```
+GestureHandlerRootView              ← required root wrapper
+  GestureDetector (globalGesture)   ← undo / redo (full screen)
+    View
+      GestureDetector (boxGesture)  ← pan + pinch + rotate
+        Animated.View               ← the box
+```
+
+---
+
+## The Two-Thread Model
+
+```
+JS / RN Thread                       UI Thread
+──────────────────────────           ──────────────────────────────
+useReducer state                     useSharedValue (translateX …)
+dispatch(action)                     gesture callbacks (worklets)
+useEffect syncs on state change      useAnimatedStyle reads values
+
+           JS ──── useEffect ────► shared values (withSpring)
+           worklet ── scheduleOnRN ──► dispatch
+```
+
+The bridge only crosses on gesture commit (`onEnd`) and on state change (`useEffect`).
+Everything in between — every frame of animation — stays on the UI thread.
+
+---
+
+## File Structure
+
+```
+src/
+  types.ts          — BoxState, AppState, Action
+  reducer.ts        — PUSH_STATE / UNDO / REDO
+  styles.ts         — StyleSheet
+  BoxGestureApp.tsx — all hooks, gestures, JSX
+App.tsx             — entry point (renders BoxGestureApp)
+```
+
+---
+
+## Simplification Notes (vs naive first implementation)
+
+### `BoxGestureApp.tsx`
+
+**Removed `currentBoxState` shared value** — the original code mirrored all of `state.current`
+into a single shared value just so worklets could read the box's position. This required a line in
+`useEffect` to keep it in sync on every state change. Replaced by 4 `base*` snapshot values
+captured in `onBegin`. Each gesture now owns its own starting point — cleaner separation of
+concerns, no global mirror.
+
+**Removed `useCallback`** — `saveState`, `undo`, `redo` were wrapped in `useCallback` for stable
+references. But gesture handlers in RNGH v2 are recreated on every render anyway, so they always
+capture the latest function. Stable refs provide no benefit here.
+
+**Removed separate gesture variables** — `panGesture`, `pinchGesture`, `rotationGesture`,
+`undoGesture`, `redoGesture` were each used exactly once. Inlining them directly into
+`Gesture.Simultaneous(...)` and `Gesture.Exclusive(...)` removes 5 variable declarations with no
+loss of readability.
+
+**Added `commit()` worklet helper** — the original code repeated the same 4-field
+`{ x, y, scale, rotation }` snapshot object in all three `onEnd` callbacks (~9 lines of
+duplication). One worklet function eliminates it.
+
+**Removed `'worklet'` from `useAnimatedStyle`** — Reanimated v4 auto-workletizes the callback.
+The directive is redundant noise.
+
+### `styles.ts`
+
+Removed `shadowColor`, `shadowOffset`, `shadowOpacity`, `shadowRadius`, and `elevation` — 5
+platform-specific props irrelevant to the gesture/undo logic. Removed the `instructions` style
+block (top-of-screen text replaced with a single `hint` at the bottom). Removed `status` and
+`statusText` (debug display for past/future stack length).
+
+### `reducer.ts`
+
+Wrapped `UNDO` and `REDO` case bodies in `{}` — required when using `const` declarations inside a
+`switch` case; without braces TypeScript/ESLint flags a lexical declaration error. Removed the
+`INITIAL_BOX_STATE` named export (used in one place, inline object is clearer). Removed the
+unused `BoxState` import.
+
+---
+
+## Interview Recall Framework
+
+When asked this question, derive the solution in this order:
+
+```
+1. State shape   → BoxState { x, y, scale, rotation }
+2. Undo stack    → { current, past[], future[] } + 3-action reducer
+3. Gesture map   → Pan=x/y  Pinch=scale  Rotation=rotation  3-finger=undo  2-tap=redo
+4. Thread bridge → onUpdate animates shared values, onEnd commits via scheduleOnRN
+5. Sync hook     → useEffect springs animated values back on undo/redo
+```
+
+Say this out loud in the interview:
+
+> "I'll model this as a time-travel state machine. BoxState is x/y/scale/rotation.
+> Undo/redo uses a past/future stack in a reducer — PUSH clears future, UNDO pops past,
+> REDO pops future. Gesture callbacks run as worklets on the UI thread; they animate shared
+> values on every frame and commit to the reducer on release via scheduleOnRN."
