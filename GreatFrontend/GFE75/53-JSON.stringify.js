@@ -66,3 +66,25 @@ jsonStringify(true); // 'true'
 jsonStringify(false); // 'false'
 jsonStringify(1); // '1'
 jsonStringify("foo"); // '"foo"'
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: handle each type case-by-case. For arrays/objects recurse into children,
+// for primitives convert directly. null check must come before object check (typeof null === 'object').
+
+function jsonStringifySimple(value) {
+  if (value === null) return "null";
+  if (typeof value === "string") return `"${value}"`;
+  if (typeof value === "number" || typeof value === "boolean")
+    return String(value);
+
+  if (Array.isArray(value)) {
+    return `[${value.map(jsonStringifySimple).join(",")}]`;
+  }
+
+  if (typeof value === "object") {
+    const pairs = Object.entries(value).map(
+      ([k, v]) => `"${k}":${jsonStringifySimple(v)}`,
+    );
+    return `{${pairs.join(",")}}`;
+  }
+}

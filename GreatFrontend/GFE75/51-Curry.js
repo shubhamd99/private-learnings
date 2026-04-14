@@ -38,3 +38,16 @@ curriedMultiplyThreeNumbers(4)(5)(6); // 120
 const containsFour = curriedMultiplyThreeNumbers(4);
 const containsFourMulFive = containsFour(5);
 containsFourMulFive(6); // 120
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: keep collecting args until we have enough to call the original function.
+// Each call returns a new function that remembers all previous args (closure).
+
+function currySimple(func) {
+  return function curried(...args) {
+    if (args.length >= func.length) {
+      return func(...args);
+    }
+    return (...moreArgs) => curried(...args, ...moreArgs);
+  };
+}

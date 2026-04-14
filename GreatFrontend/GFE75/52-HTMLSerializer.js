@@ -93,3 +93,23 @@ serializeHTML(tree);
 //     return join('\t<p>', '\t\tHello', '\t</p>')
 
 //   return join('<div>', '\t<p>\n\t\tHello\n\t</p>', '</div>')
+
+// ---- SIMPLE VERSION (for interviews) ----
+// Idea: recurse through the tree, tracking depth for indentation.
+// Base case: string node → return it with tabs. Recursive case: build open/close tags around children.
+
+function serializeHTMLSimple(node, depth = 0) {
+  const pad = "\t".repeat(depth);
+
+  if (typeof node === "string") {
+    return `${pad}${node}`;
+  }
+
+  const open = `${pad}<${node.tag}>`;
+  const close = `${pad}</${node.tag}>`;
+  const children = node.children.map((child) =>
+    serializeHTMLSimple(child, depth + 1),
+  );
+
+  return [open, ...children, close].join("\n");
+}
