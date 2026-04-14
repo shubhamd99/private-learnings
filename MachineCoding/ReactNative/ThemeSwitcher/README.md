@@ -1,97 +1,157 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Light / Dark Theme Switcher
 
-# Getting Started
+> Machine Coding — confirmed asked July 2025
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+---
 
-## Step 1: Start Metro
+## Preview
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+<p align="center">
+  <img src="preview/image-01.png" width="260" alt="Light theme" />
+  &nbsp;&nbsp;&nbsp;
+  <img src="preview/image-02.png" width="260" alt="Dark theme" />
+</p>
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+---
 
-```sh
-# Using npm
-npm start
+## What it does
 
-# OR using Yarn
-yarn start
+Toggle between light and dark themes app-wide using a single button.
+No prop drilling — any component anywhere in the tree can read and change the theme.
+
+---
+
+## Setup
+
+```bash
+npm install
+npx react-native run-ios     # or run-android
 ```
 
-## Step 2: Build and run your app
+---
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+## File Structure
 
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+```
+src/
+  ThemeContext.tsx  — theme colours, Context, Provider
+  useTheme.ts       — custom hook (shortcut for useContext)
+  HomeScreen.tsx    — UI that consumes the hook
+App.tsx             — wraps app in ThemeProvider
 ```
 
-### iOS
+---
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+## Key Concepts
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+**`createContext`** — creates a React context object. Takes a default value (we use `undefined` and guard against it in the hook). Any component inside the Provider can read this context.
 
-```sh
-bundle install
+**`useContext(ThemeContext)`** — reads the nearest Provider's value. Re-renders the component whenever the value changes (i.e. when theme toggles).
+
+**Custom `useTheme` hook** — thin wrapper over `useContext`. Two benefits:
+
+1. Screens write `useTheme()` instead of `useContext(ThemeContext)` — cleaner
+2. Throws a clear error if used outside `<ThemeProvider>`
+
+**`ThemeProvider`** — holds `useState('light')`. Passes `{ theme, colors, toggleTheme }` to all children via Context. No prop drilling needed.
+
+**Dynamic `StyleSheet`** — `makeStyles(colors)` is called inside the component so it rebuilds with new colours on every theme toggle. The function is defined outside the component to avoid redefining it on every render.
+
+---
+
+## Data Flow
+
+```
+ThemeProvider (useState)
+  └─ ThemeContext.Provider  value = { theme, colors, toggleTheme }
+       └─ HomeScreen
+            └─ useTheme()   reads value from context
+                 └─ makeStyles(colors)  builds dynamic StyleSheet
+                 └─ toggleTheme()       flips light ↔ dark
 ```
 
-Then, and every time you update your native dependencies, run:
+---
 
-```sh
-bundle exec pod install
+## Build It Step by Step
+
+**Step 1 — Define colours**
+
+```ts
+const themes = {
+  light: { background: '#fff', text: '#000', ... },
+  dark:  { background: '#121212', text: '#fff', ... },
+};
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+**Step 2 — Create context**
 
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
+```ts
+// undefined default so the hook can detect missing provider
+const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
 ```
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+**Step 3 — Create provider**
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+```ts
+const ThemeProvider = ({ children }) => {
+  // Seed from OS setting on mount. Falls back to 'light' if system returns null.
+  const systemTheme = useColorScheme();
+  const [theme, setTheme] = useState<ThemeType>(
+    systemTheme === 'dark' ? 'dark' : 'light',
+  );
 
-## Step 3: Modify your app
+  const toggleTheme = () =>
+    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
+  return (
+    <ThemeContext.Provider
+      value={{ theme, colors: themes[theme], toggleTheme }}
+    >
+      {children}
+    </ThemeContext.Provider>
+  );
+};
+```
 
-Now that you have successfully run the app, let's make changes!
+**Step 4 — Create custom hook**
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+```ts
+const useTheme = () => {
+  const ctx = useContext(ThemeContext);
+  if (!ctx) throw new Error('useTheme must be used inside <ThemeProvider>');
+  return ctx;
+};
+```
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+**Step 5 — Consume in any component**
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+```ts
+const { theme, colors, toggleTheme } = useTheme();
+const styles = makeStyles(colors); // dynamic styles
+```
 
-## Congratulations! :tada:
+**Step 6 — Wrap app**
 
-You've successfully run and modified your React Native App. :partying_face:
+```tsx
+<ThemeProvider>
+  <HomeScreen />
+</ThemeProvider>
+```
 
-### Now what?
+---
 
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
+## Interview Script
 
-# Troubleshooting
+> "I'll create a ThemeContext that holds the active theme and a toggle function.
+> A ThemeProvider wraps the app and stores theme in useState.
+> A custom useTheme hook wraps useContext for cleaner imports and adds a missing-provider guard.
+> Each screen calls useTheme(), gets the colour set, and passes it to makeStyles() for dynamic StyleSheets.
+> No prop drilling at any level."
 
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+```
+1. colours object   → { light: {...}, dark: {...} }
+2. createContext    → ThemeContext with undefined default
+3. Provider         → useState holds 'light'|'dark', passes colors + toggleTheme
+4. useTheme hook    → useContext + missing-provider guard
+5. Dynamic styles   → makeStyles(colors) called inside component
+6. Wrap app         → <ThemeProvider> at root
+```
