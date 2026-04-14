@@ -50,6 +50,151 @@ npx react-native run-android
 
 ---
 
+## Key Concepts
+
+### `useReducer`
+
+React hook that manages state through a pure function (`reducer`). Takes `(state, action) => newState`.
+Preferred over `useState` when the next state depends on the previous one or when multiple related
+values change together. Returns `[state, dispatch]` — `dispatch` sends an action to the reducer.
+
+---
+
+### `useSharedValue(initial)`
+
+Creates a value that lives on the **UI thread** (not the JS thread). Reading or writing `.value`
+inside a worklet happens at 60fps with no JS bridge crossing. On the JS thread you can also read/write
+`.value` but changes are batched and posted to the UI thread asynchronously.
+
+```ts
+const x = useSharedValue(0); // lives on UI thread
+x.value = 100; // write (from JS or worklet)
+```
+
+---
+
+### `useAnimatedStyle(fn)`
+
+Returns a style object that Reanimated keeps in sync with shared values on the UI thread.
+The callback `fn` runs as a worklet — it re-executes automatically whenever any shared value it reads changes.
+In Reanimated v4 the `'worklet'` directive is not needed; the Babel plugin adds it automatically.
+
+```ts
+const style = useAnimatedStyle(() => ({
+  transform: [{ translateX: x.value }], // re-runs when x.value changes
+}));
+```
+
+Attach to `<Animated.View style={style}>` — **not** a regular `<View>`.
+
+---
+
+### `Animated.View`
+
+A View component that can accept an `AnimatedStyleHandle` (the return value of `useAnimatedStyle`)
+as its `style` prop. A regular `<View>` cannot accept animated styles — using it would cause a type
+error and the animation would not work.
+
+---
+
+### `withSpring(toValue)`
+
+An animation helper that returns a spring-physics animated value rather than jumping instantly.
+Used by assigning it: `x.value = withSpring(100)`. The animation runs entirely on the UI thread.
+Useful here for undo/redo — the box springs back to its previous position instead of snapping.
+
+---
+
+### `'worklet'` directive
+
+A string literal placed at the top of a function body. The **Worklets Babel plugin** detects it at
+build time and serialises the function so it can be sent to and executed on the UI thread (or any
+worker runtime) without going through the JS bridge.
+
+```ts
+const fn = () => {
+  'worklet'; // ← Babel sees this and workletizes the function
+  x.value = 100;
+};
+```
+
+Without this directive, the function only exists on the JS thread and cannot safely access shared values
+at 60fps. Gesture callbacks (`.onBegin`, `.onUpdate`, `.onEnd`) are workletized automatically by
+`react-native-gesture-handler`, so the directive is optional there — but writing it explicitly is
+a good reminder that the code runs on the UI thread.
+
+---
+
+### `scheduleOnRN(fn, ...args)`
+
+Schedules a **plain JS function** to run on the React Native (JS) thread from a worklet.
+This is the bridge going the other direction: UI thread → JS thread.
+
+```
+worklet (UI thread) ──scheduleOnRN──► fn (JS thread)
+```
+
+Use it whenever you need to call `dispatch`, `setState`, or any other React API from inside a gesture
+callback. You cannot call React APIs directly from a worklet — they don't exist on the UI thread.
+
+---
+
+### `GestureHandlerRootView`
+
+A required wrapper component from `react-native-gesture-handler`. Must be the root of any tree that
+uses `GestureDetector`. Without it, gestures silently fail on Android.
+
+---
+
+### `GestureDetector`
+
+Attaches a composed gesture (built with the `Gesture.*` API) to a subtree. Any pointer events inside
+its children are processed by the attached gesture recogniser.
+
+---
+
+### `Gesture.Simultaneous(...gestures)`
+
+Composes multiple gestures so they all **recognise at the same time**. Used for the box so pan,
+pinch, and rotation can happen concurrently with a single multi-touch interaction.
+
+### `Gesture.Exclusive(...gestures)`
+
+Composes multiple gestures so **only the first one that recognises** will fire. Used for undo/redo
+so a 3-finger swipe and a 2-finger double-tap don't both trigger at once.
+
+---
+
+### Gesture lifecycle: `onBegin → onUpdate → onEnd`
+
+| Callback   | When it fires                    | What to do here                                       |
+| ---------- | -------------------------------- | ----------------------------------------------------- |
+| `onBegin`  | Finger(s) touch down             | Snapshot current animated values into `base*`         |
+| `onUpdate` | Every pointer move (every frame) | Apply `base + delta` to animated values               |
+| `onEnd`    | Finger(s) lift                   | Commit final values to the reducer via `scheduleOnRN` |
+
+`onUpdate` runs at up to 60fps. **Never dispatch to the reducer here** — you would create 60 undo
+entries per second. Only dispatch in `onEnd`.
+
+---
+
+### `e.translationX / e.translationY` (Pan)
+
+The **cumulative displacement** from where the gesture started, not from the previous frame.
+That is why `onUpdate` sets `translateX.value = baseX.value + e.translationX` — `baseX` is where
+the box was when the finger touched down, and `e.translationX` is how far it has moved since then.
+
+### `e.scale` (Pinch)
+
+The **ratio** of the current finger spread to the finger spread at gesture start.
+`1.0` = no change, `2.0` = fingers are twice as far apart. Multiply by `baseScale` to get the new scale.
+
+### `e.rotation` (Rotation)
+
+The **cumulative rotation in radians** from gesture start. Add to `baseRotation` to get the current angle.
+
+---
+
 ## Build It Step by Step
 
 ### Step 1 — Types (`src/types.ts`)
