@@ -23,33 +23,28 @@ import { reducer, initialState } from './reducer';
 import { styles } from './styles';
 
 export const BoxGestureApp = () => {
-  // ─── STEP 1: Undo/redo state (JS thread) ─────────────────────────────────
-  // useReducer holds the time-travel stack: { current, past[], future[] }.
-  // Only updated when a gesture ends (not on every frame).
+  // STEP 1 — Undo/redo stack (JS thread)
+  // Holds { current, past[], future[] }. Only changes when a gesture ends.
   const [state, dispatch] = useReducer(reducer, initialState);
 
-  // ─── STEP 2: Animated shared values (UI thread) ──────────────────────────
-  // These live on the UI thread so gesture callbacks can read/write them
-  // at 60 fps without crossing to the JS thread on every frame.
-  const translateX = useSharedValue(0);
-  const translateY = useSharedValue(0);
-  const scale = useSharedValue(1);
-  const rotation = useSharedValue(0);
+  // STEP 2 — Box position on the native UI thread (not JS)
+  // Lives here so gestures can update them 60fps without going through JS.
+  const translateX = useSharedValue(0); // x position in px
+  const translateY = useSharedValue(0); // y position in px
+  const scale = useSharedValue(1); // 1 = normal size
+  const rotation = useSharedValue(0); // angle in radians
 
-  // ─── STEP 3: Gesture start snapshots ─────────────────────────────────────
-  // Captured in onBegin so onUpdate can compute: base + delta.
-  // Without these, every onUpdate would apply delta from 0 instead of from
-  // wherever the box currently is.
+  // STEP 3 — Where the box was when the finger first touched down
+  // e.g. box is at x=100, finger lands → baseX=100
+  //      finger moves 30px right → translateX = 100 + 30 = 130
   const baseX = useSharedValue(0);
   const baseY = useSharedValue(0);
   const baseScale = useSharedValue(1);
   const baseRotation = useSharedValue(0);
 
-  // ─── STEP 4: Sync animated values when state changes ─────────────────────
-  // This is the only time animated values are driven from the JS thread.
-  // Fires after every dispatch — crucially after UNDO/REDO, springing the
-  // box back to the saved position. On a normal gesture end the values are
-  // already correct so the spring is a no-op.
+  // STEP 4 — Runs after every dispatch (ADD, UNDO, REDO)
+  // ADD:  box is already at the right position → withSpring is a no-op (same value)
+  // UNDO/REDO: state.current changed → box springs back/forward to the saved position
   useEffect(() => {
     const { x, y, scale: s, rotation: r } = state.current;
     translateX.value = withSpring(x);
@@ -58,19 +53,14 @@ export const BoxGestureApp = () => {
     rotation.value = withSpring(r);
   }, [state, translateX, translateY, scale, rotation]);
 
-  // ─── STEP 5: JS-thread action dispatchers ────────────────────────────────
-  // Plain functions — NOT worklets. Called from the UI thread via scheduleOnRN,
-  // which queues them onto the React Native (JS) thread.
-  const saveState = (s: BoxState) =>
-    dispatch({ type: 'PUSH_STATE', payload: s });
+  // STEP 5 — JS thread actions (plain functions, not worklets)
+  // Gesture onEnd calls these via scheduleOnRN to cross back to the JS thread.
+  const saveState = (s: BoxState) => dispatch({ type: 'ADD', payload: s });
   const undo = () => dispatch({ type: 'UNDO' });
   const redo = () => dispatch({ type: 'REDO' });
 
-  // ─── STEP 6: commit() worklet ─────────────────────────────────────────────
-  // Runs on the UI thread (note 'worklet' directive). Reads the four current
-  // animated values and returns them as a BoxState snapshot.
-  // Called at the end of every gesture so all three onEnd handlers share
-  // one consistent snapshot instead of repeating the object literal each time.
+  // STEP 6 — Read current box values into one object (runs on UI thread)
+  // Shared across all 3 gesture onEnd handlers to avoid repeating the same 4 fields.
   const commit = (): BoxState => {
     'worklet';
     return {
@@ -81,56 +71,53 @@ export const BoxGestureApp = () => {
     };
   };
 
-  // ─── STEP 7: Box gestures (pan + pinch + rotation run simultaneously) ─────
-  // Pattern for every gesture:
-  //   onBegin  → snapshot the current animated value into its base* counterpart
-  //   onUpdate → apply delta on top of the snapshot (runs every frame, UI thread)
-  //   onEnd    → commit snapshot to the JS-thread reducer via scheduleOnRN
+  // STEP 7 — Box gestures: pan + pinch + rotation all fire at the same time
+  // Every gesture follows the same 3-step pattern:
+  //   onBegin  → save current value as base
+  //   onUpdate → base + delta (runs 60fps)
+  //   onEnd    → save snapshot to reducer
   const boxGesture = Gesture.Simultaneous(
-    // PAN — translates the box by tracking finger displacement from start position
+    // PAN: drag right 50px → box moves right 50px from where it started
     Gesture.Pan()
       .onBegin(() => {
         'worklet';
-        baseX.value = translateX.value; // remember where box was when finger touched down
+        baseX.value = translateX.value; // remember box position at touch start
         baseY.value = translateY.value;
       })
       .onUpdate(e => {
         'worklet';
-        // e.translationX/Y is delta from gesture start, not from previous frame
-        translateX.value = baseX.value + e.translationX;
+        translateX.value = baseX.value + e.translationX; // e.translationX = total drag from start
         translateY.value = baseY.value + e.translationY;
-      })
-      .onEnd(() => {
-        'worklet';
-        scheduleOnRN(saveState, commit()); // push snapshot → reducer on JS thread
-      }),
-
-    // PINCH — scales the box by multiplying base scale by the pinch ratio
-    Gesture.Pinch()
-      .onBegin(() => {
-        'worklet';
-        baseScale.value = scale.value; // remember scale when fingers first touched
-      })
-      .onUpdate(e => {
-        'worklet';
-        // e.scale is ratio from gesture start (e.g. 2.0 = fingers spread to 2× original gap)
-        scale.value = baseScale.value * e.scale;
       })
       .onEnd(() => {
         'worklet';
         scheduleOnRN(saveState, commit());
       }),
 
-    // ROTATION — rotates the box by adding cumulative rotation delta to base angle
-    Gesture.Rotation()
+    // PINCH: spread fingers 2× apart → e.scale = 2 → box doubles in size
+    Gesture.Pinch()
       .onBegin(() => {
         'worklet';
-        baseRotation.value = rotation.value; // remember angle when fingers first touched
+        baseScale.value = scale.value; // remember box size at touch start
       })
       .onUpdate(e => {
         'worklet';
-        // e.rotation is cumulative radians from gesture start
-        rotation.value = baseRotation.value + e.rotation;
+        scale.value = baseScale.value * e.scale; // e.scale = ratio from start (2 = 2× bigger)
+      })
+      .onEnd(() => {
+        'worklet';
+        scheduleOnRN(saveState, commit());
+      }),
+
+    // ROTATION: twist fingers 90° → e.rotation = 1.57 rad → box rotates 90°
+    Gesture.Rotation()
+      .onBegin(() => {
+        'worklet';
+        baseRotation.value = rotation.value; // remember box angle at touch start
+      })
+      .onUpdate(e => {
+        'worklet';
+        rotation.value = baseRotation.value + e.rotation; // e.rotation = total twist from start
       })
       .onEnd(() => {
         'worklet';
@@ -138,20 +125,17 @@ export const BoxGestureApp = () => {
       }),
   );
 
-  // ─── STEP 8: Global gestures (undo/redo, full-screen) ────────────────────
-  // Exclusive = only one of these fires at a time.
-  // These wrap the entire screen so they work regardless of where fingers land.
+  // STEP 8 — Undo/redo gestures (full screen, only one fires at a time)
   const globalGesture = Gesture.Exclusive(
-    // 3-finger swipe down  → undo
+    // 3 fingers swipe down > 50px → undo (50px stops accidental triggers)
     Gesture.Pan()
       .minPointers(3)
       .onEnd(e => {
         'worklet';
-        // 50px threshold prevents accidental undo on tiny movements
         if (e.translationY > 50) scheduleOnRN(undo);
       }),
 
-    // 2-finger double tap → redo
+    // 2 fingers double tap → redo
     Gesture.Tap()
       .numberOfTaps(2)
       .minPointers(2)
@@ -161,23 +145,22 @@ export const BoxGestureApp = () => {
       }),
   );
 
-  // ─── STEP 9: Animated style (UI thread) ──────────────────────────────────
-  // useAnimatedStyle auto-workletizes this callback in Reanimated v4 — no
-  // 'worklet' directive needed. Re-evaluates whenever any shared value changes.
+  // STEP 9 — Convert shared values into a style (re-runs when any value changes)
+  // No 'worklet' needed — Reanimated v4 adds it automatically.
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [
       { translateX: translateX.value },
       { translateY: translateY.value },
       { scale: scale.value },
-      { rotate: `${rotation.value}rad` }, // Reanimated expects a string like "1.57rad"
+      { rotate: `${rotation.value}rad` }, // must be a string e.g. "1.57rad"
     ],
   }));
 
-  // ─── STEP 10: Render ──────────────────────────────────────────────────────
-  // GestureHandlerRootView     → required wrapper for all gesture handling
-  //   GestureDetector(global)  → undo/redo listens to the full screen
-  //     GestureDetector(box)   → pan/pinch/rotate only intercept the box
-  //       Animated.View        → receives the animated transform style
+  // STEP 10 — Render
+  // GestureHandlerRootView  → required wrapper, gestures break on Android without it
+  //   GestureDetector(global) → undo/redo on full screen
+  //     GestureDetector(box)  → pan/pinch/rotate on the box only
+  //       Animated.View       → the box that moves/scales/rotates
   return (
     <GestureHandlerRootView style={styles.container}>
       <GestureDetector gesture={globalGesture}>

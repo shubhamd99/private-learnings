@@ -18,6 +18,6 @@ export interface AppState {
 }
 
 export type Action =
-  | { type: 'PUSH_STATE'; payload: BoxState } // gesture ended → save current, clear future
+  | { type: 'ADD'; payload: BoxState } // gesture ended → save current, clear future
   | { type: 'UNDO' } // pop past → current, push current → future
   | { type: 'REDO' }; // pop future → current, push current → past
