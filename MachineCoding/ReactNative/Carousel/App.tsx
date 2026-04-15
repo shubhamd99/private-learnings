@@ -3,52 +3,56 @@ import React, { useState } from 'react';
 
 // React Native
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-
-// Safe area — use this package's SafeAreaView, not RN's built-in one.
-// The built-in only works on iOS and ignores dynamic insets on Android.
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-// Local — two separate carousel implementations
+// Local — four carousel implementations
 import { BasicCarousel } from './src/BasicCarousel';
 import { AnimatedCarousel } from './src/AnimatedCarousel';
+import { AutoPlayCarousel } from './src/AutoPlayCarousel';
+import { AnimatedAutoPlayCarousel } from './src/AnimatedAutoPlayCarousel';
+
+type Tab = 'basic' | 'animated' | 'autoplay' | 'animated-autoplay';
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'basic',             label: 'Basic' },
+  { key: 'animated',         label: 'Animated' },
+  { key: 'autoplay',         label: 'AutoPlay' },
+  { key: 'animated-autoplay', label: 'Animated\nAutoPlay' },
+];
 
 /**
- * --- ENTRY POINT ---
- * Renders a tab toggle to switch between the two carousel implementations.
- *   Basic    → FlatList + pagingEnabled (no third-party libs)
- *   Animated → manual pan gesture + Reanimated v3 (scale/opacity per slide)
+ * Entry point — tab bar to switch between the four carousel implementations.
+ *   Basic            → FlatList + pagingEnabled (no third-party)
+ *   Animated         → Reanimated scroll handler + per-slide scale
+ *   AutoPlay         → Basic + setInterval + Animated.Value dot widths
+ *   Animated AutoPlay→ Animated + setInterval + scrollX-driven dot widths
  */
 export default function App() {
-  const [tab, setTab] = useState<'basic' | 'animated'>('basic');
+  const [tab, setTab] = useState<Tab>('basic');
 
   return (
     <SafeAreaView style={styles.root}>
       {/* Tab bar */}
       <View style={styles.tabBar}>
-        <TouchableOpacity
-          style={[styles.tab, tab === 'basic' && styles.activeTab]}
-          onPress={() => setTab('basic')}>
-          <Text style={[styles.tabText, tab === 'basic' && styles.activeTabText]}>
-            Basic (FlatList)
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.tab, tab === 'animated' && styles.activeTab]}
-          onPress={() => setTab('animated')}>
-          <Text
-            style={[
-              styles.tabText,
-              tab === 'animated' && styles.activeTabText,
-            ]}>
-            Animated (Reanimated)
-          </Text>
-        </TouchableOpacity>
+        {TABS.map(t => (
+          <TouchableOpacity
+            key={t.key}
+            style={[styles.tab, tab === t.key && styles.activeTab]}
+            onPress={() => setTab(t.key)}
+          >
+            <Text style={[styles.tabText, tab === t.key && styles.activeTabText]}>
+              {t.label}
+            </Text>
+          </TouchableOpacity>
+        ))}
       </View>
 
       {/* Carousel */}
       <View style={styles.content}>
-        {tab === 'basic' ? <BasicCarousel /> : <AnimatedCarousel />}
+        {tab === 'basic'              && <BasicCarousel />}
+        {tab === 'animated'           && <AnimatedCarousel />}
+        {tab === 'autoplay'           && <AutoPlayCarousel />}
+        {tab === 'animated-autoplay'  && <AnimatedAutoPlayCarousel />}
       </View>
     </SafeAreaView>
   );
@@ -66,7 +70,7 @@ const styles = StyleSheet.create({
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
+    paddingVertical: 10,
     alignItems: 'center',
   },
   activeTab: {
@@ -74,8 +78,9 @@ const styles = StyleSheet.create({
     borderColor: '#333',
   },
   tabText: {
-    fontSize: 14,
+    fontSize: 11,
     color: '#999',
+    textAlign: 'center',
   },
   activeTabText: {
     color: '#333',

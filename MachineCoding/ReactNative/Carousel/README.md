@@ -1,6 +1,6 @@
 # Carousel — React Native (Machine Coding)
 
-Two carousel implementations toggled via a tab bar in `App.tsx`.
+Four carousel implementations toggled via a tab bar in `App.tsx`.
 
 ## Preview
 
@@ -14,17 +14,14 @@ Two carousel implementations toggled via a tab bar in `App.tsx`.
 
 ```
 src/
-  BasicCarousel/
-    constants.ts    ← SCREEN_WIDTH, SLIDES
-    styles.ts       ← StyleSheet
-    index.tsx       ← component logic
-  AnimatedCarousel/
-    constants.ts    ← SCREEN_WIDTH, SLIDES
-    styles.ts       ← StyleSheet
-    index.tsx       ← component logic
-App.tsx             ← tab toggle
-index.js            ← SafeAreaProvider + AppRegistry
+  BasicCarousel/              ← FlatList + pagingEnabled
+  AnimatedCarousel/           ← Reanimated scroll + slide scale
+  AutoPlayCarousel/           ← Basic + setInterval + animated dots
+  AnimatedAutoPlayCarousel/   ← Animated + setInterval + scrollX dots
+App.tsx                       ← tab toggle
 ```
+
+Each folder has `constants.ts`, `styles.ts`, `index.tsx`.
 
 ---
 
@@ -32,59 +29,86 @@ index.js            ← SafeAreaProvider + AppRegistry
 
 Uses only built-in React Native primitives. No third-party animation library.
 
-**Key APIs:**
-
-- `FlatList` with `horizontal` + `pagingEnabled` — auto-snaps to multiples of `SCREEN_WIDTH`
-- `onMomentumScrollEnd` — fires after scroll settles, reliable index tracking
-- `getItemLayout` — skips item measurement, required for `scrollToIndex` to work
-- `scrollToIndex` — programmatic navigation for dots and prev/next buttons
-
-**Benefits:**
-
-- Zero extra dependencies
-- Simple mental model — FlatList handles all scroll physics
-- Easy to understand and write from scratch in an interview
+| API | Why |
+|---|---|
+| `FlatList` + `pagingEnabled` | auto-snaps to multiples of `SCREEN_WIDTH` |
+| `onMomentumScrollEnd` | fires after scroll settles — reliable index tracking |
+| `getItemLayout` | skips item measurement, required for `scrollToIndex` |
+| `scrollToIndex` | programmatic navigation for dots and prev/next buttons |
 
 ---
 
 ## Animated Carousel — `src/AnimatedCarousel/`
 
-Same FlatList structure as Basic, but uses Reanimated v4 to animate each slide.
+Same FlatList structure. Adds Reanimated v4 slide scale animation.
 
-**Key APIs:**
+| API | Why |
+|---|---|
+| `useSharedValue` | `scrollX` lives on UI thread, not JS |
+| `useAnimatedScrollHandler` | reads scroll offset at 60fps without JS bridge |
+| `Animated.FlatList` | drop-in swap; accepts Reanimated scroll handler |
+| `interpolate` | maps scrollX → scale per slide on UI thread |
 
-- `useSharedValue` — holds `scrollX`, lives on the UI thread (not JS)
-- `useAnimatedScrollHandler` — reads scroll offset at 60fps without touching JS thread
-- `Animated.FlatList` — drop-in swap for `FlatList`; accepts the Reanimated scroll handler
-- `useAnimatedStyle` + `interpolate` — derives `scale` per slide from scroll position; runs on UI thread
+---
 
-**Benefits:**
+## AutoPlay Carousel — `src/AutoPlayCarousel/`
 
-- Scroll tracking and scale animation run entirely on the UI thread — no JS bridge, no dropped frames
-- `Animated.FlatList` is the only structural change from BasicCarousel — easy to explain the delta
-- `interpolate` maps scroll offset to any visual property (scale, opacity, translateY) with one call
+Built on top of BasicCarousel. Two additions:
+
+**1. Auto-play** — `setInterval` in a `useEffect([activeIndex])`:
+```
+Effect re-runs on every activeIndex change → timer always resets after each slide advance
+(whether triggered by auto-play or manual swipe)
+```
+
+**2. Animated dots** — one `Animated.Value` per dot:
+```
+Animated.timing → width: 8 (inactive) or 20 (active)
+useNativeDriver: false — width is a layout prop, native driver doesn't support it
+```
+
+| API | Why |
+|---|---|
+| `setInterval` in `useEffect([activeIndex])` | timer resets after each slide change |
+| `Animated.Value` per dot | drives dot width on JS thread |
+| `useNativeDriver: false` | required for layout property (`width`) animation |
+
+---
+
+## Animated AutoPlay Carousel — `src/AnimatedAutoPlayCarousel/`
+
+Built on top of AnimatedCarousel. Two additions:
+
+**1. Auto-play** — same `setInterval` pattern as AutoPlayCarousel.
+
+**2. Animated dots driven by `scrollX`** — dot width interpolated from scroll position on UI thread:
+```
+scrollX at this dot's slide → width 20 (active)
+scrollX one slide away      → width 8  (inactive)
+```
+Dots animate during the swipe itself, not just after it settles.
+
+| API | Why |
+|---|---|
+| `AnimatedDot` component | `useAnimatedStyle` can't be called inside `.map()` — needs its own component |
+| `interpolate(scrollX, ...)` | derives dot width from scroll on UI thread — synced with finger |
+| `Extrapolation.CLAMP` | prevents dot width going outside 8–20 range |
+
+---
+
+## Dot animation comparison
+
+| | AutoPlay (3rd) | Animated AutoPlay (4th) |
+|---|---|---|
+| Value | `Animated.Value` (JS thread) | `useSharedValue` via `scrollX` (UI thread) |
+| Trigger | `useEffect` on `activeIndex` change | Continuous — follows scroll position in real time |
+| Animates during swipe | No — updates after scroll settles | Yes — synced with finger at 60fps |
 
 ---
 
 ## Why `GestureHandlerRootView`?
 
-`react-native-gesture-handler` replaces React Native's default touch handling system with its own native recognizers. On Android this replacement is complete — the library takes over all touch dispatch. Without `GestureHandlerRootView` at the root, the two touch systems compete and scroll or tap events can silently fail.
-
-Even though `AnimatedCarousel` doesn't use explicit gestures like `Gesture.Pan()`, the package is installed (it ships with Reanimated v4 as a peer dep), so the wrapper is required.
-
-**Rule:** one `GestureHandlerRootView` wrapping each screen (or the whole app root) whenever `react-native-gesture-handler` is in the project.
-
----
-
-## Key Difference
-
-|                 | Basic                   | Animated                                                                           |
-| --------------- | ----------------------- | ---------------------------------------------------------------------------------- |
-| Scroll handling | RN built-in (JS thread) | `useAnimatedScrollHandler` (UI thread)                                             |
-| List component  | `FlatList`              | `Animated.FlatList`                                                                |
-| Slide animation | None                    | `interpolate` → scale per slide                                                    |
-| Performance     | Fine for most cases     | Guaranteed 60fps, no JS involvement                                                |
-| Dependencies    | None                    | `react-native-reanimated`, `react-native-gesture-handler`, `react-native-worklets` |
+`react-native-gesture-handler` replaces RN's touch system on Android. Without `GestureHandlerRootView`, the two systems compete and gestures silently fail. Required once per screen that uses the package.
 
 ---
 
