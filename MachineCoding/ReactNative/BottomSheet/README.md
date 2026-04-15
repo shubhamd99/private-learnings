@@ -1,97 +1,103 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Bottom Sheet
 
-# Getting Started
+> Machine Coding — two versions: Basic (no third-party) and Gesture (Reanimated)
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+<p align="center">
+  <img src="preview/01.png" width="280" alt="Bottom sheet open" />
+</p>
 
-## Step 1: Start Metro
+---
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## File structure
 
-To start the Metro dev server, run the following command from the root of your React Native project:
-
-```sh
-# Using npm
-npm start
-
-# OR using Yarn
-yarn start
+```
+src/
+  styles.ts             — shared styles + SHEET_HEIGHT constant
+  BasicBottomSheet.tsx  — Animated + PanResponder (built-in RN)
+  GestureBottomSheet.tsx — gesture-handler + Reanimated (UI-thread gestures)
+App.tsx                 — tab switcher + open button
 ```
 
-## Step 2: Build and run your app
+---
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+## How it works
 
-### Android
+```
+translateY = 0            → sheet fully visible
+translateY = SHEET_HEIGHT → sheet fully off-screen (below viewport)
 
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+Open button pressed → setVisible(true) → useEffect → spring to 0
+Close triggered     → setVisible(false) → useEffect → spring to SHEET_HEIGHT
 ```
 
-### iOS
+Close triggers (both versions):
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+1. Backdrop tap
+2. Close button
+3. Swipe down > 80px
+4. Flick down fast (velocity threshold)
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+---
 
-```sh
-bundle install
+## Basic version — `Animated` + `PanResponder`
+
+| Concept                     | Detail                                                             |
+| --------------------------- | ------------------------------------------------------------------ |
+| `Animated.Value`            | lives on JS thread; sufficient for this use case                   |
+| `PanResponder`              | `onMoveShouldSetPanResponder: dy > 5` — only claims downward drags |
+| `translateY.setValue(g.dy)` | follows finger directly during drag                                |
+| `Animated.spring`           | snaps back to open if not dismissed                                |
+| `useNativeDriver: true`     | offloads transform to native for smoother animation                |
+| `pointerEvents="none"`      | when closed, container doesn't block underlying touches            |
+
+---
+
+## Gesture version — `react-native-gesture-handler` + Reanimated
+
+| Concept                  | Detail                                                                |
+| ------------------------ | --------------------------------------------------------------------- |
+| `useSharedValue`         | lives on UI thread — gesture can update it at 60fps without JS bridge |
+| `Gesture.Pan`            | gesture callback runs as a worklet on UI thread                       |
+| `withSpring`             | spring physics on UI thread — no JS involvement                       |
+| `scheduleOnRN(onClose)`  | bridge back to JS thread to call `onClose` from a worklet             |
+| `GestureHandlerRootView` | required root wrapper — without it gestures fail on Android           |
+
+```
+UI thread                      JS thread
+────────────────────           ──────────────────
+Gesture.Pan onUpdate           useEffect → withSpring
+translateY (shared value)      onClose → setVisible(false)
+onEnd → scheduleOnRN(onClose) ──►
 ```
 
-Then, and every time you update your native dependencies, run:
+---
 
-```sh
-bundle exec pod install
+## Why `pointerEvents="none"` when closed
+
+The sheet container uses `absoluteFill` — it covers the whole screen even when off-screen. Without `pointerEvents="none"`, the invisible container intercepts all taps and the Open button becomes untappable after the sheet closes.
+
+---
+
+## Packages (Gesture version only)
+
+| Package                        | Why                                      |
+| ------------------------------ | ---------------------------------------- |
+| `react-native-gesture-handler` | gestures on UI thread, not JS thread     |
+| `react-native-reanimated`      | shared values + animated styles at 60fps |
+| `react-native-worklets`        | `scheduleOnRN` — call JS from a worklet  |
+
+---
+
+## Interview Script
+
+> "One boolean drives open/close. translateY=0 is open, translateY=SHEET_HEIGHT is closed.
+> Basic uses PanResponder on JS thread; Gesture version uses shared values on UI thread so animation never drops frames even if JS is busy.
+> Both versions: backdrop tap, Close button, and swipe-down all call the same onClose."
+
 ```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
+1. State        → useState(false) in App
+2. Animation    → spring translateY between 0 and SHEET_HEIGHT
+3. Drag down    → onUpdate clamps to > 0; onEnd checks threshold
+4. Close paths  → backdrop / button / swipe — all call onClose
+5. pointerEvents → "none" when closed so underlying content is tappable
 ```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
