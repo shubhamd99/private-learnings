@@ -6,7 +6,6 @@ import { View, Text } from 'react-native';
 
 // Third-party
 import {
-  GestureHandlerRootView,
   GestureDetector,
   Gesture,
 } from 'react-native-gesture-handler';
@@ -162,19 +161,17 @@ export const BoxGestureApp = () => {
   //     GestureDetector(box)  → pan/pinch/rotate on the box only
   //       Animated.View       → the box that moves/scales/rotates
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <GestureDetector gesture={globalGesture}>
-        <View style={styles.content}>
-          <GestureDetector gesture={boxGesture}>
-            <Animated.View style={[styles.box, animatedStyle]}>
-              <Text style={styles.boxText}>Box</Text>
-            </Animated.View>
-          </GestureDetector>
-          <Text style={styles.hint}>
-            Pan · Pinch · Rotate{'\n'}3-finger ↓ = Undo · 2-finger 2× = Redo
-          </Text>
-        </View>
-      </GestureDetector>
-    </GestureHandlerRootView>
+    <GestureDetector gesture={globalGesture}>
+      <View style={[styles.container, styles.content]}>
+        <GestureDetector gesture={boxGesture}>
+          <Animated.View style={[styles.box, animatedStyle]}>
+            <Text style={styles.boxText}>Box</Text>
+          </Animated.View>
+        </GestureDetector>
+        <Text style={styles.hint}>
+          Pan · Pinch · Rotate{'\n'}3-finger ↓ = Undo · 2-finger 2× = Redo
+        </Text>
+      </View>
+    </GestureDetector>
   );
 };
