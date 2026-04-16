@@ -2,14 +2,7 @@
 import React, { useRef, useState } from 'react';
 
 // React Native
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-} from 'react-native';
+import { View, Text, FlatList, TouchableOpacity } from 'react-native';
 
 // Local
 import { SLIDES, SCREEN_WIDTH } from './constants';
@@ -22,12 +15,15 @@ export const BasicCarousel = () => {
   // STEP 2 — ref to call scrollToIndex imperatively (prev/next buttons, dot taps)
   const listRef = useRef<FlatList>(null);
 
-  // STEP 3 — called when scroll momentum stops; reliable page-change detection
-  // contentOffset.x ÷ SCREEN_WIDTH = index (e.g. 750px on 375px screen → index 2)
-  const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const index = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-    setActiveIndex(index);
-  };
+  // STEP 3 — FlatList tells us the index directly when a slide becomes >50% visible
+  // Must be a stable ref — FlatList ignores it if the function reference changes
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
+      if (viewableItems[0]?.index != null)
+        setActiveIndex(viewableItems[0].index);
+    },
+  ).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
   // STEP 4 — programmatic navigation used by dots and prev/next buttons
   const scrollTo = (index: number) => {
@@ -56,11 +52,12 @@ export const BasicCarousel = () => {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onMomentumScrollEnd}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         getItemLayout={(_, index) => ({
-          length: SCREEN_WIDTH,
-          offset: SCREEN_WIDTH * index,
-          index,
+          length: SCREEN_WIDTH, // each slide is exactly one screen wide
+          offset: SCREEN_WIDTH * index, // slide 0 starts at 0, slide 1 at 375, slide 2 at 750…
+          index, // required by FlatList; lets scrollToIndex skip layout measurement
         })}
       />
 

@@ -2,15 +2,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 
 // React Native
-import {
-  Animated,
-  FlatList,
-  Text,
-  TouchableOpacity,
-  View,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
-} from 'react-native';
+import { Animated, FlatList, Text, TouchableOpacity, View } from 'react-native';
 
 // Local
 import { SLIDES, SCREEN_WIDTH, AUTOPLAY_INTERVAL } from './constants';
@@ -58,9 +50,14 @@ export const AutoPlayCarousel = () => {
     return () => clearInterval(id); // clear on activeIndex change or unmount
   }, [activeIndex]);
 
-  const onMomentumScrollEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    setActiveIndex(Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH));
-  };
+  // Must be a stable ref — FlatList ignores it if the function reference changes
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
+      if (viewableItems[0]?.index != null)
+        setActiveIndex(viewableItems[0].index);
+    },
+  ).current;
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
 
   const scrollTo = (index: number) => {
     listRef.current?.scrollToIndex({ index, animated: true });
@@ -83,11 +80,12 @@ export const AutoPlayCarousel = () => {
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={onMomentumScrollEnd}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         getItemLayout={(_, index) => ({
-          length: SCREEN_WIDTH,
-          offset: SCREEN_WIDTH * index,
-          index,
+          length: SCREEN_WIDTH, // each slide is exactly one screen wide
+          offset: SCREEN_WIDTH * index, // slide 0 at 0, slide 1 at 375, slide 2 at 750…
+          index, // lets scrollToIndex skip layout measurement
         })}
       />
 
