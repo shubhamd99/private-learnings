@@ -1,97 +1,125 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# Global Toast System
 
-# Getting Started
+Globally triggerable toast system with auto-hide, custom duration, color, icon, manual close, and animated enter/exit. No third-party libraries.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+<img src="./preview/01.png" width="300" />
 
-## Step 1: Start Metro
+---
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## How it works
 
-To start the Metro dev server, run the following command from the root of your React Native project:
-
-```sh
-# Using npm
-npm start
-
-# OR using Yarn
-yarn start
+```
+useToast().showToast(options)
+        |
+        v
+ToastProvider  ──────────────────────────  adds item to toasts[] (max 5)
+        |
+        v
+ToastContainer  ─────────────────────────  maps toasts[] → <AnimatedToast>
+        |
+        v
+AnimatedToast  ──────────────────────────  plays enter/exit animation
+        |
+        v
+Toast  ──────────────────────────────────  renders UI + starts auto-hide timer
+        |
+        v
+onClose  ────────────────────────────────  AnimatedToast plays exit, then removes from state
 ```
 
-## Step 2: Build and run your app
+---
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+## Component structure
 
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+```
+ToastProvider  (Context + queue state)
+  └── children
+  └── ToastContainer  (absolute positioned, bottom-right)
+        └── AnimatedToast  (opacity + translateY animation wrapper)
+              └── Toast  (UI: icon | message | ✕ button)
 ```
 
-### iOS
+---
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+## File structure
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
-
-```sh
-bundle install
+```
+src/
+  Toast/
+    constants.ts       MAX_TOASTS, DEFAULT_DURATION, TOAST_COLORS
+    styles.ts          toastStyles, animatedToastStyles, containerStyles
+    Toast.tsx          UI + auto-hide timer
+    AnimatedToast.tsx  enter/exit animation wrapper
+    ToastContainer.tsx renders stacked toasts
+    ToastContext.tsx   Context + Provider + queue logic
+    useToast.ts        public hook
+    index.ts           barrel export
+  styles.ts            ToastDemo styles
+  ToastDemo.tsx        demo screen
+App.tsx
 ```
 
-Then, and every time you update your native dependencies, run:
+---
 
-```sh
-bundle exec pod install
+## Usage
+
+Wrap your app in `ToastProvider`, then call `useToast()` from any component:
+
+```tsx
+// App.tsx
+import { ToastProvider } from './src/Toast';
+
+export default function App() {
+  return (
+    <ToastProvider>
+      <YourApp />
+    </ToastProvider>
+  );
+}
+
+// AnyComponent.tsx
+import { useToast } from './src/Toast';
+
+const { showToast } = useToast();
+
+showToast({
+  message: 'File saved!',
+  color: '#2e7d32',
+  icon: '✓',
+  duration: 2000,
+});
 ```
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+---
 
-```sh
-# Using npm
-npm run ios
+## Toast options
 
-# OR using Yarn
-yarn ios
-```
+| Prop       | Type     | Default     | Description                       |
+| ---------- | -------- | ----------- | --------------------------------- |
+| `message`  | `string` | required    | Text displayed in the toast       |
+| `duration` | `number` | `3000`      | Auto-hide delay in ms             |
+| `color`    | `string` | `'#323232'` | Background color                  |
+| `icon`     | `string` | —           | Emoji or short string on the left |
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+---
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
+## Animation
 
-## Step 3: Modify your app
+| Phase | opacity | translateY | Duration |
+| ----- | ------- | ---------- | -------- |
+| Enter | `0 → 1` | `20 → 0`   | 200ms    |
+| Exit  | `1 → 0` | `0 → -20`  | 150ms    |
 
-Now that you have successfully run the app, let's make changes!
+`useNativeDriver: true` — both `opacity` and `transform` are GPU-composited, no JS bridge per frame.
 
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
+---
 
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
+## Key concepts
 
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
+**No prop drilling** — `ToastProvider` stores the queue in Context. Any component anywhere in the tree calls `useToast()` to trigger a toast.
 
-## Congratulations! :tada:
+**Queue management** — `showToast` is wrapped in `useCallback` for stable identity. New toasts are blocked when `MAX_TOASTS` (5) is reached. Each toast removes itself from the array by id on close.
 
-You've successfully run and modified your React Native App. :partying_face:
+**Animated close** — `AnimatedToast` intercepts `onClose`, plays the exit animation, and only removes the toast from state after `.start()` completes — so the toast stays visible during its exit.
 
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+**Auto-hide timer** — started once on mount inside `Toast` with a `useRef`-guarded `setTimeout`. Calls `handleClose` (not `onClose` directly), so the exit animation always runs regardless of whether the close is manual or automatic.
