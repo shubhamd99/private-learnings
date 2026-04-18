@@ -1,45 +1,53 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- */
+import React from 'react';
+import { StyleSheet, KeyboardAvoidingView, Platform, View } from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
-import {
-  SafeAreaProvider,
-  useSafeAreaInsets,
-} from 'react-native-safe-area-context';
+import { FormProvider, useFormContext } from './src/context/FormContext';
+import { StepPersonal } from './src/components/StepPersonal';
+import { StepReview } from './src/components/StepReview';
+import { ProgressBar } from './src/components/ProgressBar';
 
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+// The orchestrated wizard relies completely on Context to grab step index.
+const FormWizard = () => {
+  const { currentStep } = useFormContext();
 
   return (
+    <View style={styles.contentContainer}>
+      {/* Zero props passed - components are fully self-sufficient using Context */}
+      {currentStep === 1 && <StepPersonal />}
+      {currentStep === 2 && <StepReview />}
+    </View>
+  );
+};
+
+export default function App() {
+  return (
     <SafeAreaProvider>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <AppContent />
+      <SafeAreaView style={styles.safeArea}>
+        <KeyboardAvoidingView
+          style={styles.keyboardAvoid}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          {/* Master Form Provider wraps everything down to the progress bar natively */}
+          <FormProvider>
+            <ProgressBar />
+            <FormWizard />
+          </FormProvider>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </SafeAreaProvider>
   );
 }
 
-function AppContent() {
-  const safeAreaInsets = useSafeAreaInsets();
-
-  return (
-    <View style={styles.container}>
-      <NewAppScreen
-        templateFileName="App.tsx"
-        safeAreaInsets={safeAreaInsets}
-      />
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: {
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  keyboardAvoid: {
+    flex: 1,
+  },
+  contentContainer: {
     flex: 1,
   },
 });
-
-export default App;

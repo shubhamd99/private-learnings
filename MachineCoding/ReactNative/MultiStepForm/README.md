@@ -1,97 +1,53 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# React Native Multi-Step Form (Zero Dependency)
 
-# Getting Started
+<p align="center">
+  <img src="./preview/01.png" height="500" alt="Step 1 Preview" />
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <img src="./preview/02.png" height="500" alt="Step 2 Preview" />
+</p>
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+A minimal, expertly structured Multi-Step Form built natively in React Native specifically designed for Machine Coding interviews.
 
-## Step 1: Start Metro
+## 🎯 The Interview Perspective
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+When an interviewer asks you to build a multi-step form, they are actively testing three core React fundamentals:
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+1. **State Lifting (`App.tsx`)**: Can you keep the single source of truth at the highest necessary level without polluting independent components?
+2. \*\*Prop Drilling vs Modularity`: Can you extract `StepPersonal`and`StepContact`into totally separate files to keep`App.tsx` from becoming 500 lines of spaghetti code?
+3. **Validation Bounding**: Can you prevent a user from continuing to Step 2 if Step 1 is invalid, and display specific UI errors locally?
 
-```sh
-# Using npm
-npm start
+## 🚀 Architecture Decisions
 
-# OR using Yarn
-yarn start
-```
+To answer the criteria above, this codebase relies on absolutely **zero external dependencies** (no `react-hook-form`, no `yup`). It proves absolute mastery over React core principles:
 
-## Step 2: Build and run your app
+### 1. Unified Payload Model (`src/types.ts`)
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+We define a strict `FormData` type and incredibly strict `StepProps`. Every Step component (1, 2, and 3) inherits the exact same `StepProps` interface. This proves type-safety and eliminates prop-drilling errors natively.
 
-### Android
+### 2. State Orchestrator (`App.tsx`)
 
-```sh
-# Using npm
-npm run android
+The `App.tsx` acts exclusively as the "Controller". It maintains:
 
-# OR using Yarn
-yarn android
-```
+- `currentStep`: `1` or `2`
+- `formData`: The unified object holding `{ firstName, lastName }`
+- `errors`: A dynamic Map of error messages.
+- `validateStep()`: A function that explicitly intercepts progression (`handleNext`). It inspects the `currentStep` index, runs specific presence checks, and securely blocks traversal while projecting inline error messages to the children.
 
-### iOS
+### 3. Styled Presentation Components
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+The UI is broken perfectly into:
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+- `<StepPersonal />`
+- `<StepReview />`
 
-```sh
-bundle install
-```
+Each component utilizes standard React Native `StyleSheet` blocks annotated with `// #1`, `// #2` logic detailing exactly _why_ a specific layout decision was made (e.g. relying on `flexDirection: 'row'` bounded by `justifyContent: 'space-between'` for the navigation rows).
 
-Then, and every time you update your native dependencies, run:
+## 💻 How to Run
 
-```sh
-bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+1. Open a terminal inside the project directory.
+2. Run standard commands to start the Metro bundler:
+   ```bash
+   npm install
+   npm run start
+   ```
+3. Load it via Expo Go (if configured) or the native iOS/Android simulators depending on your environment.
