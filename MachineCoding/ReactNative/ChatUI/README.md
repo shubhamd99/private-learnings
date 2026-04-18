@@ -1,97 +1,80 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# React Native Chat UI (Machine Coding Round)
 
-# Getting Started
+<div align="center">
+  <img src="./preview/01.png" width="300" alt="Chat UI Preview" />
+</div>
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+A minimal, modular, and interview-ready Chat UI built with React Native. This project is specifically designed to demonstrate clean component architecture, fundamental React hooks (`useState`, `useCallback`), and robust React Native layout strategies (Flexbox, `FlatList`, `KeyboardAvoidingView`).
 
-## Step 1: Start Metro
+## 🎯 Core Features Evaluated
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+Interviews typically look for the following in a Chat UI machine coding round:
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+- **Clean Component Structure:** Splitting logic and view (e.g., separating input, chat bubbles, and the list).
+- **State Management:** Properly appending messages to an array without mutating the previous state.
+- **Optimistic UI Updates:** Providing immediate visual feedback (e.g., a "sending" state) before receiving server confirmation to guarantee a snappy user experience.
+- **Dynamic Memory Pagination (Infinite Scroll):** Starting with a completely empty state and natively capping the active Virtual DOM array. Pushing all overflow past a limit of 12 natively into a background cache array, and actively pulling them back out dynamically when reaching the scroll limit.
+- **Inverted FlatList UI:** Natively leveraging `inverted={true}` to flip the FlatList, eliminating manual calculate layouts to strictly attach messages directly above the keyboard naturally.
 
-```sh
-# Using npm
-npm start
+---
 
-# OR using Yarn
-yarn start
+## 📁 Project Structure
+
+```text
+src/
+ ┣ components/
+ ┃ ┣ ChatBubble.tsx    # Renders individual user/AI message bubbles (handles left/right alignment)
+ ┃ ┗ ChatInput.tsx     # The multiline input field and send button
+ ┗ hooks/
+   ┗ useChat.ts        # Custom hook handling all business logic and simulated API delays
+App.tsx                # Main entry point bridging state and UI with FlatList
 ```
 
-## Step 2: Build and run your app
+---
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+## 🚀 Step-by-Step Implementation Plan
 
-### Android
+### Step 1: The Business Logic (`useChat.ts`)
 
-```sh
-# Using npm
-npm run android
+Instead of tangling API logic inside the view, an isolated custom hook was created to maintain the single source of truth.
 
-# OR using Yarn
-yarn android
-```
+- Defined the `Message` interface (`id`, `text`, `isAI`, `status`).
+- Used `useState` to maintain the `messages` array and an `isTyping` boolean.
+- Used two native `useState` bindings: an active `messages` array, and a background/archived `historyCache` array.
+- Natively bounds the active conversation memory. If the `messages` array exceeds **12** objects, the app slices the oldest messages out of memory and physically pushes them into `historyCache`.
+- Implemented the **Optimistic UI Pattern**: The user's message is immediately appended to state with a `'sending'` status icon.
+- Triggered a mocked API delay (`setTimeout`) which, upon resolving, flips the earlier message's status to `'sent'` while appending the AI's response.
+- Implemented **Infinite Scrolling via Cache Resumption** (`loadMoreMessages`): Automatically pulls arrays natively from `historyCache` and prepends them physically back onto the UI layer mimicking DB requests strictly from user inputs.
 
-### iOS
+### Step 2: The Lowest-Level Components (`ChatBubble.tsx` & `ChatInput.tsx`)
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+- **`ChatBubble`:** A purely presentational component. Passed a `Message` object, it uses conditional styling in the `StyleSheet` to align AI messages left (`justifyContent: 'flex-start'`) and User messages right (`justifyContent: 'flex-end'`).
+- **`ChatInput`:** Manages its local `text` state natively (controlled input). Designed to dynamically disable the "Send" button if the text is empty OR if the fake API is currently resolving (`disabled={isTyping}`).
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+### Step 3: Complex Main Layout (`App.tsx`)
 
-```sh
-bundle install
-```
+The root file focuses heavily on orchestration and Flexbox UI edge-cases:
 
-Then, and every time you update your native dependencies, run:
+- Wrapped the view in `SafeAreaProvider` and `SafeAreaView` from `react-native-safe-area-context` to safely avoid the notch and hardware home indicators.
+- Wrapped the core layout in a `KeyboardAvoidingView` set to `flex: 1` so the view naturally compresses when the iOS keyboard triggers, instead of overlapping the input field.
+- Arranged the vertical layout such that the `<FlatList />` utilizes the remainder of the vertical space while the `<ChatInput />` rests naturally at the bottom.
 
-```sh
-bundle exec pod install
-```
+### Step 4: The FlatList Polish (Inverted Physics)
 
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
+List logic is notoriously heavily scrutinized:
 
-```sh
-# Using npm
-npm run ios
+- Passed the **`inverted`** prop to natively anchor our text organically to the bottom UI boundaries without relying on buggy programmatic overrides.
+- Implemented cross-scale transformations (`transform: [{ scaleY: -1 }]`) to fix inverted UI elements on empty arrays to face right-side up.
+- Bound physical backwards state caching directly to `onEndReached` without pulling mock databases on start. 
+- Mapped double loading UIs physically into natural edge-cases (`ListHeaderComponent` correctly manages the typing dots on the bottom, while `ListFooterComponent` accurately floats a history loader organically at the absolute top natively).
 
-# OR using Yarn
-yarn ios
-```
+---
 
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
+## 💻 How to Run
 
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+1. Make sure you have installed standard dependencies (`npm install`).
+2. Run standard commands to start the bundler:
+   ```bash
+   npm run start
+   ```
+3. Load it via Expo Go or the native iOS/Android simulators depending on your environment.
