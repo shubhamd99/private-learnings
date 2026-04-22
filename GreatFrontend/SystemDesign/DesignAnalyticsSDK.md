@@ -226,9 +226,11 @@ Batch payloads are **gzip-compressed** before sending (`Content-Encoding: gzip` 
 
 ```mermaid
 graph TD
+    Init[SDK Init] -->|restore inflight_ids + reload queues from MMKV| PQ[Pending Queue]
+
     App[Client App]
     App -->|sendEvent / sendEventsBatch| Enrich[Enrich: add device_id, user_id, uuid, timestamp]
-    Enrich -->|persist to MMKV| PQ[Pending Queue]
+    Enrich -->|persist to MMKV| PQ
 
     PQ -->|timer 30s / size 50 / flush / app background| Batcher[Batching Engine\nfill up to 50 from PQ first\nthen remaining slots from FQ]
 
