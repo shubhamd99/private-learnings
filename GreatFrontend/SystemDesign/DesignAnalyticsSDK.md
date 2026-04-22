@@ -227,52 +227,20 @@ Batch payloads are **gzip-compressed** before sending (`Content-Encoding: gzip` 
 ```mermaid
 graph TD
     App[Client App]
-    App -->|sendEvent / sendEventsBatch| API[API Layer - JS Thread]
+    App -->|sendEvent / sendEventsBatch| Enrich[Enrich: add device_id, user_id, uuid, timestamp]
+    Enrich -->|persist to MMKV| PQ[Pending Queue]
 
-    subgraph Enqueue
-        API -->|Dispatchers.IO coroutine - fire and forget| Enrich[Enrich event\nadd device_id, user_id, uuid, timestamp]
-        Enrich -->|Acquire Mutex| WR[Write payload to MMKV under event-uuid key\nAppend UUID to pending_queue_ids\nRelease Mutex]
-    end
+    PQ -->|timer 30s / size 50 / flush / app background| Batcher[Batching Engine\nfill up to 50 from PQ first\nthen remaining slots from FQ]
 
-    WR --> PQ[Pending Queue\npending_queue_ids]
+    FQ[Failure Queue] -->|backoff elapsed| Batcher
 
-    subgraph DrainTriggers [Drain Triggers - any one fires the Batcher]
-        T1[Timer - every 30s]
-        T2[Queue size reaches flushAt 50 events]
-        T3[App goes to background\nAppState or ProcessLifecycleOwner]
-    end
+    Batcher -->|gzip + HTTP POST| Net{Network?}
+    Net -->|offline| Net
+    Net -->|online| Srv((Analytics Server))
 
-    App -->|Analytics.flush| Batcher[Batching Engine]
-    T1 --> Batcher
-    T2 --> Batcher
-    T3 --> Batcher
-    PQ --> Batcher
-
-    FQ[Failure Queue\nfailure_queue_ids] --> BC{Backoff elapsed?\nnow - last_retry_ts\n>= 2^retry_count - 1 seconds}
-    BC -->|Yes - eligible| Batcher
-    BC -->|No - keep waiting| FQ
-
-    Batcher -->|Move IDs to inflight_ids in MMKV\nGzip compress JSON batch| Net{Network available?}
-    Net -->|Offline| Wait[Sleep - wait for connectivity]
-    Wait -->|Network restored| Net
-    Net -->|Online| Srv((Analytics Server))
-
-    Srv -->|200 OK| OK[Remove from inflight_ids\nDelete event payloads from MMKV]
-
-    Srv -->|500 or Timeout| R500[Remove from inflight_ids\nIncrement retry_count\nSet last_retry_timestamp to now\nMove to failure_queue_ids]
-    R500 --> RC{retry_count >= maxRetryCount?}
-    RC -->|No - retry later| FQ
-    RC -->|Yes - exhausted| Drop1[Drop - delete payload from MMKV]
-
-    Srv -->|400 Bad Request| Drop2[Drop batch\nDelete payloads from MMKV]
-    subgraph Eviction [Queue Eviction - when total cap is hit]
-        Ev{New event arrives\nbut queue is full} -->|FQ has events - already failing| EF[FIFO evict oldest from Failure Queue]
-        Ev -->|FQ empty| EP[FIFO evict oldest from Pending Queue]
-    end
-
-    PQ -->|Cap reached| Ev
-
-    subgraph CrashRecovery [Crash Recovery on SDK Init]
-        Init[SDK Init] -->|Move inflight_ids back to pending_queue_ids\nReload both queues from MMKV| PQ
-    end
+    Srv -->|200 OK| Done[Delete payloads from MMKV]
+    Srv -->|500 / Timeout| F[retry_count++\nlast_retry_timestamp = now]
+    F -->|retry_count less than maxRetryCount| FQ
+    F -->|retry_count >= maxRetryCount| Drop[Drop from MMKV]
+    Srv -->|400| Drop
 ```
