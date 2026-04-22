@@ -319,6 +319,59 @@ function onTypingEvent(e: TypingEvent) {
 
 Throttle outgoing `typing_start` events to once every 3s so you don't flood the server on every keystroke.
 
+### Pagination — Loading Older Messages
+
+Chat opens showing the latest 30 messages (already in MMKV — no network needed). When the user scrolls to the top, fetch the next page using a cursor:
+
+```typescript
+async function loadOlderMessages(convId: string) {
+  if (isLoadingMore || !hasMore) return;
+  setLoadingMore(true);
+
+  const cursor = MMKV.getString(`chat_cursor_${convId}`); // null on first page
+  const msgs = await api.get(
+    `/conversations/${convId}/messages?before=${cursor}&limit=30`,
+  );
+
+  if (msgs.length < 30) setHasMore(false); // reached the top of history
+  MMKV.set(`chat_cursor_${convId}`, msgs[0].serverId); // oldest message in this batch
+  MessageStore.prepend(convId, msgs); // insert before existing messages
+}
+```
+
+Triggered by `onStartReached` on the inverted FlashList. The cursor is the `serverId` of the oldest message already loaded — the server returns 30 messages older than that. Saving the cursor to MMKV means a reload after backgrounding resumes pagination from the right spot.
+
+### FlashList — Performant Message List
+
+Use **FlashList** (Shopify) instead of FlatList. It recycles item components correctly even when items have different heights (text vs image vs system message), which is exactly the chat use case:
+
+```tsx
+<FlashList
+  ref={listRef}
+  data={messages}
+  inverted // newest at bottom; scroll up to go back in time
+  estimatedItemSize={72} // rough average height — reduces layout passes
+  keyExtractor={(msg) => msg.localId}
+  getItemType={(msg) => {
+    // separate recycling pools per type — no layout thrash
+    if (msg.mediaUrl) return "media";
+    if (msg.isSystem) return "system";
+    return "text";
+  }}
+  renderItem={({ item }) => <MessageBubble msg={item} />}
+  onStartReached={loadOlderMessages}
+  onStartReachedThreshold={0.3} // trigger when 30% from top
+  ListHeaderComponent={isLoadingMore ? <ActivityIndicator /> : null}
+/>
+```
+
+Key decisions:
+
+- **`inverted`** — list renders bottom-up so new messages always appear at the bottom without any `scrollToEnd` call.
+- **`getItemType`** — FlashList keeps a separate view pool per type. A text bubble view is never reused for an image bubble, avoiding mismatched layouts.
+- **`estimatedItemSize`** — set this to the actual average height of your messages. Wrong values cause the scroll position to jump when the real height is measured. Log actual heights during dev and tune this number.
+- **Memoize `MessageBubble`** with `React.memo` — the list is the hottest render path in the app.
+
 ---
 
 ## 6. Real Tools to Know
