@@ -4,6 +4,31 @@ An analytics SDK lets developers track user behavior in their app. The core chal
 
 **Architecture framing:** The public API (TypeScript) runs on the JS thread and returns instantly. All heavy work — persisting events, batching, and sending — happens in a native background module (Kotlin on Android, Swift on iOS).
 
+```mermaid
+graph TD
+    Init[SDK Init] -->|restore inflight_ids + reload queues from MMKV| PQ[Pending Queue]
+
+    App[Client App]
+    App -->|sendEvent / sendEventsBatch| Enrich[Enrich: add device_id, user_id, uuid, timestamp]
+    Enrich -->|persist to MMKV| PQ
+
+    PQ -->|timer 30s / size 50 / flush / app background| Batcher[Batching Engine\nfill up to 50 from PQ first\nthen remaining slots from FQ]
+
+    FQ[Failure Queue] -->|backoff elapsed| Batcher
+
+    Batcher -->|gzip + HTTP POST| Net{Network?}
+    Net -->|offline - wait for connectivity| Net
+    Net -->|online| Srv((Analytics Server))
+
+    PQ -->|queue full - eviction| Evict[Drop oldest from FQ first\nif FQ empty drop oldest from PQ]
+
+    Srv -->|200 OK| Done[Delete payloads from MMKV]
+    Srv -->|500 / Timeout| F[retry_count++\nlast_retry_timestamp = now]
+    F -->|retry_count less than maxRetryCount| FQ
+    F -->|retry_count >= maxRetryCount| Drop[Drop from MMKV]
+    Srv -->|400| Drop
+```
+
 ---
 
 ## 1. Requirements (R)
@@ -221,32 +246,3 @@ If a batch is delivered successfully but the server's `200 OK` response is lost 
 ### Payload Compression
 
 Batch payloads are **gzip-compressed** before sending (`Content-Encoding: gzip` header). Analytics JSON compresses by ~60–70%, cutting bandwidth usage significantly — directly satisfying the efficiency non-functional requirement.
-
----
-
-## Summary Diagram
-
-```mermaid
-graph TD
-    Init[SDK Init] -->|restore inflight_ids + reload queues from MMKV| PQ[Pending Queue]
-
-    App[Client App]
-    App -->|sendEvent / sendEventsBatch| Enrich[Enrich: add device_id, user_id, uuid, timestamp]
-    Enrich -->|persist to MMKV| PQ
-
-    PQ -->|timer 30s / size 50 / flush / app background| Batcher[Batching Engine\nfill up to 50 from PQ first\nthen remaining slots from FQ]
-
-    FQ[Failure Queue] -->|backoff elapsed| Batcher
-
-    Batcher -->|gzip + HTTP POST| Net{Network?}
-    Net -->|offline - wait for connectivity| Net
-    Net -->|online| Srv((Analytics Server))
-
-    PQ -->|queue full - eviction| Evict[Drop oldest from FQ first\nif FQ empty drop oldest from PQ]
-
-    Srv -->|200 OK| Done[Delete payloads from MMKV]
-    Srv -->|500 / Timeout| F[retry_count++\nlast_retry_timestamp = now]
-    F -->|retry_count less than maxRetryCount| FQ
-    F -->|retry_count >= maxRetryCount| Drop[Drop from MMKV]
-    Srv -->|400| Drop
-```
