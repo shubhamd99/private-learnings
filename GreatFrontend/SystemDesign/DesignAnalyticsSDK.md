@@ -189,7 +189,9 @@ If `retry_count >= maxRetryCount` (default 5), the event is **permanently droppe
 
 - Total cap: `maxQueueSize` (10,000 events) and `maxStorageSize` (10MB), applied across both queues.
 - Recommended split: ~70% Pending, ~30% Failure — fresh events are more valuable than already-failing ones.
-- When the cap is hit and a new event arrives:
+- The most common time this cap is hit is when the device is **offline for an extended period** — events keep enqueuing but the Batcher can't send anything, so the queue slowly fills up.
+- When the cap is hit and a new event arrives, the oldest event is **permanently dropped from MMKV** to make room. Events are never moved to the Failure Queue during eviction — the Failure Queue is only for events that were transmitted and got a server error back. An event that never left the device has no reason to go there.
+- Eviction order:
   1. Drop the **oldest from the Failure Queue first** — already failed at least once, least time-sensitive.
   2. If the Failure Queue is empty, drop the oldest from the Pending Queue.
 
@@ -237,8 +239,10 @@ graph TD
     FQ[Failure Queue] -->|backoff elapsed| Batcher
 
     Batcher -->|gzip + HTTP POST| Net{Network?}
-    Net -->|offline| Net
+    Net -->|offline - wait for connectivity| Net
     Net -->|online| Srv((Analytics Server))
+
+    PQ -->|queue full - eviction| Evict[Drop oldest from FQ first\nif FQ empty drop oldest from PQ]
 
     Srv -->|200 OK| Done[Delete payloads from MMKV]
     Srv -->|500 / Timeout| F[retry_count++\nlast_retry_timestamp = now]
