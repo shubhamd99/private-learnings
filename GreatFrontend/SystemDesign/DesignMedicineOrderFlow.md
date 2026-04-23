@@ -1,63 +1,62 @@
 # System Design: Medicine Order Flow (React Native)
 
-Prescription upload triggers a validation gate before the cart is unlocked. Cart is local-first (Zustand + MMKV). Checkout goes through a payment orchestration layer. Order status tracked via push + polling fallback.
+A user can browse medicines, upload a prescription if needed, add items to cart, pay, and track delivery. The cart is saved locally on the device. Before payment, the server double-checks everything. Order status updates come via push notifications, with polling as a backup.
 
 ```mermaid
 graph TD
-    PDP[Product Detail] --> RX{Requires Rx?}
+    PDP[Product Detail] --> RX{Requires Prescription?}
     RX -->|no| CART[Add to Cart]
-    RX -->|yes| RX_UPLOAD[Prescription Upload]
-    RX_UPLOAD --> UPLOAD_S3[Compress → S3 pre-signed URL]
-    UPLOAD_S3 --> POST_RX[POST /prescriptions]
-    POST_RX --> POLL{Push or Poll status}
+    RX -->|yes| RX_UPLOAD[Upload Prescription]
+    RX_UPLOAD --> UPLOAD_S3[Compress image → Upload to cloud storage]
+    UPLOAD_S3 --> POST_RX[Tell server about the prescription]
+    POST_RX --> POLL{Wait for approval}
     POLL -->|approved| CART
-    POLL -->|rejected| REJECT[Show reason + re-upload]
+    POLL -->|rejected| REJECT[Show rejection reason + let user re-upload]
 
-    CART --> CHECKOUT[Checkout: Address → Slot → Coupon]
-    CHECKOUT --> INIT_ORDER[POST /orders with Idempotency-Key]
-    INIT_ORDER --> SHEET[Native Payment Sheet - Stripe/Razorpay]
-    SHEET -->|success| CONFIRM[POST /orders/:id/confirm]
-    SHEET -->|failure| RETRY[Retry or change method]
-    CONFIRM --> TRACK[Order Tracking]
-    TRACK --> STATUS[Push update / 30s poll → confirmed→packed→dispatched→delivered]
+    CART --> CHECKOUT[Checkout: Pick address → Delivery slot → Apply coupon]
+    CHECKOUT --> INIT_ORDER[Create order on server with a unique request ID]
+    INIT_ORDER --> SHEET[Show Payment Screen - Stripe/Razorpay]
+    SHEET -->|success| TRACK[Track Order]
+    SHEET -->|failure| RETRY[Retry or switch payment method]
+    TRACK --> STATUS[Push notification / poll every 30s → confirmed → packed → dispatched → delivered]
 ```
 
 ---
 
 ## 1. Requirements
 
-### Functional
+### Functional (What the app must do)
 
-- Prescription upload via camera or file picker; cart unlocks only after server approval
-- Cart: add/remove/quantity, persisted across restarts, substitution suggestions
-- Checkout: address, delivery slot, coupon/wallet, order summary
-- Payment: card, UPI, wallet, POD; 3DS/OTP handled by SDK; retry on failure
-- Order tracking: status timeline + last-mile map; push-first with polling fallback
-- Reorder: re-validates Rx if expired before adding to cart
+- User can upload a prescription via camera or file; they can only add that medicine to cart after a pharmacist approves it
+- Cart: add/remove items, change quantity; cart is saved so it survives app restarts
+- Checkout: pick delivery address, choose a time slot, apply a coupon or use wallet balance
+- Payment: card, UPI, wallet, or cash on delivery; OTP/3D Secure is handled by the payment SDK automatically; user can retry if payment fails
+- Order tracking: see a status timeline; push notifications are the primary update method, polling every 30 seconds is the fallback
+- Reorder: if the prescription has expired, the user must upload a fresh one before re-ordering
 
-### Non-functional
+### Non-functional (How well it must do it)
 
-- Rx images never cached on device; pre-signed S3 URLs with short TTL
-- PCI compliance delegated entirely to Stripe/Razorpay SDK
-- Idempotent order creation — double-tap must not double-charge
-- Cart survives crashes (MMKV); regulated fields (price, limits) always from server
-
----
-
-## 2. Architecture
-
-| Component                       | What it does                                                                         |
-| ------------------------------- | ------------------------------------------------------------------------------------ |
-| **Prescription Manager**        | Upload, compress, S3 PUT, status poll/push, gates cart for Rx items                  |
-| **Cart Store (Zustand + MMKV)** | Local-first cart; `/cart/validate` before entering checkout                          |
-| **Checkout Orchestrator**       | Sequences address → slot → coupon → payment; rolls back on failure                   |
-| **Payment Service**             | Wraps Stripe/Razorpay; server creates intent, client presents sheet, server confirms |
-| **Order Store (Zustand)**       | Order list + active order; updated by push or poll                                   |
-| **Push Handler**                | FCM/APNs data push for Rx approval and order status updates                          |
+- Prescription images are never stored on the device; the upload link expires in 15 minutes
+- The app never touches raw card data — the payment SDK (Stripe/Razorpay) handles that entirely
+- Placing an order twice (e.g., double-tap) must never charge the user twice
+- Cart survives crashes because it is saved on-device; prices and quantity limits always come from the server, never trusted from the client
 
 ---
 
-## 3. Data Model
+## 2. Architecture — Main Pieces
+
+| Piece                               | What it does                                                                                                                                  |
+| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Prescription Manager**            | Handles photo upload, sends it to cloud storage, waits for pharmacist approval, and blocks checkout for prescription medicines until approved |
+| **Cart (stored locally on device)** | Saves cart items on the device so they survive restarts; checks with server before entering checkout                                          |
+| **Checkout Orchestrator**           | Walks the user through address → slot → coupon → payment in order; rolls back if something fails                                              |
+| **Payment Service**                 | Talks to Stripe/Razorpay; server creates the payment session, user pays in the SDK's own screen, server confirms the charge                   |
+| **Order Store**                     | Keeps list of orders and the active order; updated via push or polling                                                                        |
+| **Push Handler**                    | Receives silent push notifications for prescription approvals and order status changes                                                        |
+
+---
+
+## 3. Data Shapes
 
 ### Prescription
 
@@ -72,7 +71,7 @@ graph TD
 }
 ```
 
-`status`: `pending | under_review | approved | rejected | expired`
+`status` can be: `pending | under_review | approved | rejected | expired`
 
 ### Cart Item
 
@@ -97,6 +96,15 @@ graph TD
   "paymentStatus": "captured",
   "totalAmount": 320.0,
   "deliverySlot": { "date": "2026-04-24", "window": "10:00-12:00" },
+  "items": [
+    {
+      "productId": "prod_amox500",
+      "name": "Amoxicillin 500mg",
+      "quantity": 2,
+      "unitPrice": 45.0,
+      "rxRequired": true
+    }
+  ],
   "timeline": [
     { "status": "confirmed", "ts": 1714000000000 },
     { "status": "dispatched", "ts": 1714020000000 }
@@ -104,17 +112,19 @@ graph TD
 }
 ```
 
-### MMKV Keys
+> **Why items live on the Order (not just in the cart):** The cart is cleared immediately after a successful payment. If the user opens the order later — confirmation screen, order history, reorder flow — the only source of truth for what they bought is the server's order record. The client never reconstructs order items from cart state.
 
-| Key                        | Value                                   |
-| -------------------------- | --------------------------------------- |
-| `cart_items`               | JSON array of CartItem                  |
-| `pending_payment_order_id` | orderId for crash recovery              |
-| `checkout_idempotency_key` | UUID — cleared after successful confirm |
+### What we save locally on the device (MMKV — fast on-device key-value store)
+
+| Key                        | What it stores                                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `cart_items`               | The full cart as a JSON list                                                                           |
+| `pending_payment_order_id` | Order ID saved just before showing the payment screen — used to recover if the app crashes mid-payment |
+| `checkout_idempotency_key` | A unique ID for this checkout attempt — cleared after a successful order to prevent duplicate charges  |
 
 ---
 
-## 4. API
+## 4. API Endpoints
 
 ```
 POST /prescriptions           { s3Key, productIds }     → { rxId, status }
@@ -123,20 +133,33 @@ GET  /prescriptions/:rxId                               → { status, eligiblePr
 POST /cart/validate           { items }                 → { valid, issues: [{productId, issue}] }
 
 GET  /delivery/slots          ?pincode&date             → [{ slotId, window, available }]
+
 POST /orders                  { items, addressId, slotId, couponCode }  → { orderId, clientSecret }
                               Header: Idempotency-Key: <uuid>
-POST /orders/:id/confirm      { paymentIntentId }       → { status: "confirmed" }
-GET  /orders/:id/location                               → { lat, lng, eta }
+                              Server does:
+                                1. Creates order record in DB with status "pending_payment"
+                                2. Calls Stripe: "create a payment intent for this amount"
+                                3. Stripe returns a paymentIntentId
+                                4. Server saves paymentIntentId on the order record in DB
+                                5. Returns orderId + clientSecret (a token Stripe needs to show the payment sheet)
+
+GET  /orders/:id                                        → full order including items, timeline, paymentStatus
+GET  /orders/:id/location                               → { lat, lng } — only when status is dispatched
+
+Stripe webhook (server-side, not a client API):
+  payment_intent.succeeded → server marks order "confirmed", sends push to client
+  payment_intent.failed    → server marks order "failed", sends push to client
 ```
 
 ---
 
-## 5. Deep Dives
+## 5. Key Design Decisions (Deep Dives)
 
 ### Prescription Upload
 
 ```typescript
 async function uploadPrescription(uri: string, productIds: string[]) {
+  // Shrink the image before uploading (saves bandwidth)
   const compressed = await ImageResizer.createResizedImage(
     uri,
     1200,
@@ -144,30 +167,43 @@ async function uploadPrescription(uri: string, productIds: string[]) {
     "JPEG",
     80,
   );
+
+  // Ask the server for a short-lived upload link (pre-signed URL)
   const { uploadUrl, s3Key } = await api.post("/media/rx-upload-url");
+
+  // Upload directly to cloud storage using that link
   await fetch(uploadUrl, {
     method: "PUT",
     body: await readFile(compressed.uri),
   });
+
+  // Tell our server the upload is done
   const { rxId } = await api.post("/prescriptions", { s3Key, productIds });
-  PrescriptionPoller.start(rxId); // push-first, poll as fallback
-  await FileSystem.deleteAsync(compressed.uri); // never cache Rx on device
+
+  // Start listening for approval (push notification first, polling as backup)
+  PrescriptionPoller.start(rxId);
+
+  // Delete the compressed image from the device immediately — never cache prescriptions
+  await FileSystem.deleteAsync(compressed.uri);
 }
 ```
 
-### Prescription Validation States (follow-up area)
+### Prescription Status — What the user sees
 
-| State          | UI                                   | Action                          |
-| -------------- | ------------------------------------ | ------------------------------- |
-| `pending`      | Spinner                              | —                               |
-| `under_review` | "Pharmacist reviewing (up to 2 hrs)" | Browse, can't checkout Rx items |
-| `approved`     | Green unlock                         | Add to cart                     |
-| `rejected`     | Error + reason                       | Re-upload corrected Rx          |
-| `expired`      | Warning + expiry date                | Doctor renewal                  |
+| Status         | What the UI shows                    | What the user can do                          |
+| -------------- | ------------------------------------ | --------------------------------------------- |
+| `pending`      | Loading spinner                      | Wait                                          |
+| `under_review` | "Pharmacist reviewing (up to 2 hrs)" | Browse, but can't checkout prescription items |
+| `approved`     | Green checkmark, cart unlocked       | Add to cart                                   |
+| `rejected`     | Error message with reason            | Re-upload a corrected prescription            |
+| `expired`      | Warning with expiry date             | Get a new prescription from the doctor        |
 
-### Polling + Push Hybrid (Rx and Order status)
+### Push + Polling Together (for prescription and order status)
+
+**Why both?** Push is fast but can be missed (app backgrounded, network gap). Polling is a reliable safety net.
 
 ```typescript
+// Polling: checks status on an increasing delay (3s, 6s, 9s... up to 30s max)
 function poll(rxId: string, attempt = 1) {
   const delay = Math.min(3000 * attempt, 30_000);
   setTimeout(async () => {
@@ -178,7 +214,7 @@ function poll(rxId: string, attempt = 1) {
   }, delay);
 }
 
-// Push wins — stops polling immediately
+// Push wins — if we get a push notification, stop polling immediately
 function onPush(data: PushPayload) {
   if (data.type === "rx_status_update") {
     store.update(data.rxId, { status: data.status });
@@ -187,13 +223,13 @@ function onPush(data: PushPayload) {
 }
 ```
 
-### Cart — Local-First + Server Validation
+### Cart — Local First, Server Validates Before Checkout
 
 ```typescript
-// Add to cart optimistically (non-Rx items)
+// Adding to cart is instant (no server call needed for non-prescription items)
 cartStore.addItem(item);
 
-// Validate before checkout — server checks stock, Rx status, qty limits
+// Before checkout, ask the server to verify stock, prescription status, and quantity limits
 async function validateCartBeforeCheckout() {
   const result = await api.post("/cart/validate", { items: cartStore.items });
   if (!result.valid)
@@ -202,31 +238,42 @@ async function validateCartBeforeCheckout() {
 }
 ```
 
-**Optimistic UI rule:** Cart mutations (add/remove) are optimistic. Payment, Rx approval, order creation — never optimistic.
+**Rule of thumb:** Adding/removing items from cart = instant (optimistic). Payment, prescription approval, order creation = always wait for the server.
 
 ### Payment Flow (Stripe)
 
 ```typescript
-// Server creates intent — client secret back to client
+// 1. Server creates a payment session and sends back a secret token
 const { orderId, clientSecret } = await api.post("/orders", payload, {
   headers: { "Idempotency-Key": getOrCreateIdempotencyKey() },
 });
-MMKV.set("pending_payment_order_id", orderId); // crash recovery
 
+// 2. Save the order ID locally in case the app crashes during payment
+MMKV.set("pending_payment_order_id", orderId);
+
+// 3. Show Stripe's own payment screen (handles card input, 3DS, OTP internally)
 await initPaymentSheet({
   paymentIntentClientSecret: clientSecret,
   merchantDisplayName: "PharmaCo",
 });
-const { error } = await presentPaymentSheet(); // 3DS handled inside sheet
+const { error } = await presentPaymentSheet();
+
+// 4. Payment sheet closed successfully — no confirm call needed
+//    Stripe fires payment_intent.succeeded webhook directly to our server
+//    Server marks the order confirmed and sends a push notification to the client
 if (!error) {
-  await api.post(`/orders/${orderId}/confirm`, { paymentIntentId });
   MMKV.delete("pending_payment_order_id");
   clearIdempotencyKey();
   cartStore.clearCart();
+  navigate("OrderTracking", { orderId }); // poll GET /orders/:id until status is "confirmed"
 }
 ```
 
-### Idempotency — Prevent Double Orders
+### Preventing Duplicate Orders (Idempotency)
+
+**Problem:** User double-taps "Place Order", or retries after a network failure — we must never charge twice.
+
+**Solution:** Generate a unique ID for each checkout attempt. Send it as a header with every order creation request. The server ignores any duplicate request with the same ID. The key is saved locally and only deleted after the order is confirmed — so even a crash doesn't lose it.
 
 ```typescript
 function getOrCreateIdempotencyKey() {
@@ -239,10 +286,15 @@ function getOrCreateIdempotencyKey() {
     })()
   );
 }
-// Cleared only after successful confirm — crash reuses same key, server deduplicates
 ```
 
-### Crash Recovery — Payment in Flight
+### Crash Recovery — App Crashed During Payment
+
+**Problem:** App crashes after the payment sheet closes but before the user sees the order confirmation screen.
+
+**Not a problem for order confirmation** — Stripe's webhook already notified the server, so the order is confirmed regardless. The only issue is the client doesn't know where to navigate.
+
+**Solution:** On every app launch (after login), check if there's a saved `pending_payment_order_id`. Fetch the order status and navigate accordingly:
 
 ```typescript
 async function recoverPendingPayment() {
@@ -250,12 +302,11 @@ async function recoverPendingPayment() {
   if (!orderId) return;
   const order = await api.get(`/orders/${orderId}`);
   if (order.paymentStatus === "captured")
-    navigate("OrderConfirmation", { orderId });
+    navigate("OrderConfirmation", { orderId }); // payment went through, show success
   else if (["failed", "cancelled"].includes(order.paymentStatus))
-    navigate("Checkout");
-  else navigate("PaymentRecovery", { orderId }); // still pending
+    navigate("Checkout"); // payment failed, let user retry
+  else navigate("PaymentRecovery", { orderId }); // still pending, show recovery screen
 }
-// Call after auth established in App.tsx
 ```
 
 ### Order Tracking
@@ -263,20 +314,20 @@ async function recoverPendingPayment() {
 ```typescript
 function useOrderTracking(orderId: string) {
   useEffect(() => {
-    if (isTerminalStatus(order?.status)) return;
+    if (isTerminalStatus(order?.status)) return; // don't poll for delivered/cancelled orders
     const interval = setInterval(async () => {
       const updated = await api.get(`/orders/${orderId}`);
       orderStore.update(orderId, updated);
       if (isTerminalStatus(updated.status)) clearInterval(interval);
-    }, 30_000); // fallback poll — push is fast path
+    }, 30_000); // poll every 30 seconds as fallback; push notifications are the fast path
     return () => clearInterval(interval);
   }, [orderId]);
 }
 ```
 
-### Pay-on-Delivery Path
+### Cash on Delivery (Pay on Delivery)
 
-No payment sheet — order is created and confirmed in one step. Server sets `paymentStatus: "pending_collection"`. No `pending_payment_order_id` written to MMKV since there's no SDK sheet to crash during.
+No payment screen is shown. Order is created and confirmed in one step. No crash-recovery key is written because there's no payment SDK involved.
 
 ```typescript
 if (method === "pod") {
@@ -289,82 +340,67 @@ if (method === "pod") {
   cartStore.clearCart();
   navigate("OrderConfirmation", { orderId });
 }
-// Delivery agent collects cash → server marks paymentStatus: "collected" via their app
+// Delivery agent collects cash → their app marks paymentStatus as "collected"
 ```
 
-### Stock Reservation Timing
+### When Does Stock Actually Get Reserved?
 
-**Cart add does NOT reserve stock** — only soft checks stock status. Actual reservation happens at `POST /orders` (server atomically decrements inventory). This avoids holding stock for abandoned carts.
+**Not when added to cart** — only a soft check happens ("is it in stock?"). Stock is actually held when the order is created (`POST /orders`). This way we don't block inventory for carts that are abandoned.
 
-Consequence: a cart item can become out-of-stock between "add to cart" and checkout. `/cart/validate` catches this at checkout entry and surfaces it before payment — never after.
+**Consequence:** An item can go out of stock between "add to cart" and checkout. The `/cart/validate` call catches this at checkout entry — before payment, never after.
 
-### Last-Mile Location Tracking
+### Live Map Tracking (Delivery Agent Location)
 
-```typescript
-function useDeliveryLocation(orderId: string, isOutForDelivery: boolean) {
-  const [pin, setPin] = useState<LatLng | null>(null);
-  useEffect(() => {
-    if (!isOutForDelivery) return;
-    const id = setInterval(async () => {
-      const { lat, lng } = await api.get(`/orders/${orderId}/location`);
-      setPin({ lat, lng });
-    }, 30_000);
-    return () => clearInterval(id);
-  }, [orderId, isOutForDelivery]);
-  return pin;
-}
-// Render on <MapView> with Animated pin; stop polling on "delivered" push
-```
+Only active when order status is `dispatched`. Client polls `GET /orders/:id/location` every 30 seconds and updates the pin on the map. Stops polling when a "delivered" push arrives. Not shown for any other status.
 
-### Order Cancellation + Refund
+### Order Cancellation and Refund
 
 ```
-DELETE /orders/:id          → allowed only while status ∈ { confirmed, packed }
-                              returns { refundId, estimatedRefundTs }
+DELETE /orders/:id   → only allowed when status is "confirmed" or "packed"
+                       returns { refundId, estimatedRefundTs }
 ```
 
-- **Before dispatch:** Cancel is instant; inventory released server-side; refund issued to original payment method via Stripe `refund.create` / Razorpay refund API.
-- **After dispatch:** Cannot cancel in-app — returns `{ cancellable: false }`. User contacts support.
-- **POD orders:** No refund needed on cancel; just mark `paymentStatus: "void"`.
+- **Before the order is dispatched:** Cancel works instantly. Stock is released. Refund goes back to the original payment method via Stripe/Razorpay.
+- **After dispatch:** Cannot cancel via the app — user must contact support.
+- **Cash on delivery orders:** No refund needed; order is just marked void.
 
-Client: optimistic "Cancelling…" state → confirm on server response. If server rejects (already dispatched), revert UI with toast.
+UI: Immediately show "Cancelling…" (optimistic). If server rejects it (already dispatched), revert and show a message.
 
-### Regulated Error Handling
+### Error Codes the App Handles
 
 ```typescript
 type PharmacyError =
-  | { code: "RX_REQUIRED"; productId: string }
-  | { code: "RX_EXPIRED"; rxId: string }
-  | { code: "CONTROLLED_SUBSTANCE_LIMIT"; limit: number }
-  | { code: "PAYMENT_DECLINED"; retryable: boolean }
-  | { code: "ORDER_DUPLICATE"; existingOrderId: string };
+  | { code: "RX_REQUIRED"; productId: string } // prescription needed
+  | { code: "RX_EXPIRED"; rxId: string } // prescription is too old
+  | { code: "CONTROLLED_SUBSTANCE_LIMIT"; limit: number } // server enforced daily limit
+  | { code: "PAYMENT_DECLINED"; retryable: boolean } // card/UPI failed
+  | { code: "ORDER_DUPLICATE"; existingOrderId: string }; // same order already exists
 
-// ORDER_DUPLICATE → navigate to existing order (idempotency fallback)
-// RX_EXPIRED → prompt reorder Rx upload flow
-// CONTROLLED_SUBSTANCE_LIMIT → server enforced; show banner, not client-side guard
+// ORDER_DUPLICATE → take user to the existing order (not an error, just a redirect)
+// RX_EXPIRED → send user back to prescription upload
+// CONTROLLED_SUBSTANCE_LIMIT → shown as a banner; never checked on the client
 ```
 
 ---
 
 ## 6. Security
 
-| Risk                       | Mitigation                                                              |
-| -------------------------- | ----------------------------------------------------------------------- |
-| Rx image leak              | Pre-signed S3 URLs, 15-min TTL, server validates ownership              |
-| Cart price tampering       | Server re-validates all prices and limits at order creation             |
-| Double charge              | Idempotency-Key header + crash recovery with `pending_payment_order_id` |
-| Controlled substance abuse | Per-user daily limits enforced at `/cart/validate` and order creation   |
-| Fake prescription          | AI + pharmacist pipeline; approval source logged in Rx record           |
+| Risk                               | How we handle it                                                                                       |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| Prescription image leaks           | Upload links expire in 15 minutes; server checks that the user owns the prescription before serving it |
+| User tampers with price in the app | Server re-calculates all prices and limits at order creation — client values are ignored               |
+| Double charge                      | Unique request ID (idempotency key) per checkout + crash recovery logic                                |
+| Controlled substance abuse         | Per-user daily purchase limits enforced server-side, not client-side                                   |
+| Fake prescription                  | AI screening + pharmacist review; who approved it is recorded in the prescription record               |
 
 ---
 
-## 7. Tools
+## 7. Third-Party Libraries
 
-| Tool                           | Use                                                                     |
-| ------------------------------ | ----------------------------------------------------------------------- |
-| `@stripe/stripe-react-native`  | Card, Apple/Google Pay, 3DS — PCI compliant, no raw card data on device |
-| `react-native-razorpay`        | UPI, wallets, net banking (India)                                       |
-| `react-native-vision-camera`   | High-quality Rx document capture                                        |
-| `react-native-document-picker` | PDF Rx upload from Files app                                            |
-| `react-native-image-resizer`   | Compress Rx photos before S3 upload                                     |
-| `react-native-maps`            | Delivery agent map tracking                                             |
+| Library                        | What it's used for                                                                 |
+| ------------------------------ | ---------------------------------------------------------------------------------- |
+| `@stripe/stripe-react-native`  | Card payments, Apple/Google Pay, 3DS — PCI compliant, app never sees raw card data |
+| `react-native-razorpay`        | UPI, wallets, net banking (popular in India)                                       |
+| `react-native-vision-camera`   | High quality camera for capturing prescription documents                           |
+| `react-native-document-picker` | Let user pick a PDF prescription from their files                                  |
+| `react-native-image-resizer`   | Compress prescription photos before uploading to save bandwidth                    |
