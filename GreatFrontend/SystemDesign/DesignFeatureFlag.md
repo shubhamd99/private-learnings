@@ -5,12 +5,11 @@
 ```mermaid
 graph TD
     Init[App starts] -->|load saved flags| CACHE[Flags from MMKV]
-    Init -->|no saved flags on first install| BOOTSTRAP[Bundled default flags]
+    Init -->|no saved flags or API failure| DEF2[Hardcoded defaults in code]
 
     App -->|identify userId| STORE[Flag Store - Zustand]
-    STORE --> SYNC[Sync Manager - fetch /flags from server]
-    SYNC -->|nothing changed - 304| SKIP[skip, do nothing]
-    SYNC -->|new config - 200| MERGE[find what changed + save to MMKV]
+    STORE --> SYNC[Sync Manager - fetch /flags every 5 min]
+    SYNC -->|new config| MERGE[find what changed + save to MMKV]
     MERGE -->|only changed flags| NOTIFY[re-render affected components]
 
     POLL[poll every 5 min] --> SYNC
@@ -47,7 +46,6 @@ graph TD
 - **No async on render path:** `getFlag()` must return instantly — never blocks the UI.
 - **Same result every time:** Same user always gets the same variant for the same flag, on any device.
 - **Works offline:** Use locally cached flags when there is no network.
-- **Low bandwidth:** Only download the config when it actually changes (ETag + 304).
 
 ---
 
@@ -69,7 +67,6 @@ graph TD
 
 ```json
 {
-  "version": 42,
   "flags": [
     {
       "key": "new_checkout_ui",
@@ -78,7 +75,7 @@ graph TD
       "enabled": true,
       "rules": [
         { "type": "user_segment", "userIds": ["usr_beta_1"], "value": true },
-        { "type": "percentage", "rolloutPct": 20, "value": true }
+        { "type": "percentage", "trafficPct": 20, "value": true }
       ]
     },
     {
@@ -86,17 +83,21 @@ graph TD
       "type": "experiment",
       "defaultValue": "control",
       "enabled": true,
-      "allocation": 80,
+      "trafficPct": 80,
       "variants": [
-        { "key": "control", "weight": 50, "config": { "ctaLabel": "Buy Now" } },
+        {
+          "key": "control",
+          "splitPct": 50,
+          "config": { "ctaLabel": "Buy Now" }
+        },
         {
           "key": "treatment_a",
-          "weight": 30,
+          "splitPct": 30,
           "config": { "ctaLabel": "Add to Cart" }
         },
         {
           "key": "treatment_b",
-          "weight": 20,
+          "splitPct": 20,
           "config": { "ctaLabel": "Get It" }
         }
       ]
@@ -106,24 +107,17 @@ graph TD
 ```
 
 - `enabled: false` — emergency off switch. All users get `defaultValue`, no rules run.
-- `allocation: 80` — only 80% of users enter the experiment. The other 20% get `defaultValue`.
-- `weight` — how to split traffic among variants within that 80%.
-
-`flags.bootstrap.json` — simple defaults bundled inside the app for the very first launch:
-
-```json
-{ "new_checkout_ui": false, "checkout_cta_experiment": "control" }
-```
+- `trafficPct` — what % of users are affected. For a flag rule: 20 means 20% of users get the flag ON. For an experiment: 80 means only 80% of users enter the experiment; the other 20% get `defaultValue`.
+- `splitPct` — of the users inside the experiment, how to divide them across variants. Must add up to 100.
 
 ### What is saved in MMKV
 
-| Key                 | What is stored                                                     |
-| ------------------- | ------------------------------------------------------------------ |
-| `ff_config`         | Latest flag config from the server                                 |
-| `ff_etag`           | Used to check if the config changed since last fetch               |
-| `ff_user_context`   | `{ userId, attributes }` — kept across restarts                    |
-| `ff_exposures`      | Tracks which experiments the user already saw (no double-counting) |
-| `ff_override_{key}` | Dev-only flag override for testing                                 |
+| Key              | What is stored                                                     |
+| ---------------- | ------------------------------------------------------------------ |
+| `config`         | Latest flag config from the server                                 |
+| `user`           | `{ userId, attributes }` — kept across restarts                    |
+| `exposures`      | Tracks which experiments the user already saw (no double-counting) |
+| `override_{key}` | Dev-only flag override for testing                                 |
 
 ---
 
@@ -131,14 +125,10 @@ graph TD
 
 ```typescript
 // App.tsx — call before the navigator renders
-await FeatureFlags.init({
-  sdkKey: "prod_sk_abc",
-  bootstrapFlags: require("./flags.bootstrap.json"),
-  pollInterval: 300_000, // 5 minutes
-});
+await FeatureFlags.init({ pollInterval: 300_000 });
 
-// Tell the SDK who the current user is
-FeatureFlags.identify("usr_123", { isPremium: true, appVersion: "6.2.0" });
+// Tell the SDK who the current user is (call after login)
+FeatureFlags.identify("usr_123");
 
 // Get a flag value — always synchronous, safe to call during render
 const isEnabled = FeatureFlags.getFlag("new_checkout_ui", false);
@@ -154,9 +144,8 @@ function CheckoutScreen() {
 
 ```
 GET /api/flags
-  Headers: Authorization, X-User-Id, If-None-Match: {etag}
-  → 200: new config + ETag header
-  → 304: nothing changed, do nothing
+  Headers: X-User-Id
+  → 200: full flag config JSON
 ```
 
 ---
@@ -165,146 +154,103 @@ GET /api/flags
 
 ### How Flag Rules Are Evaluated
 
-```typescript
-function evaluateFlag(flag: FlagConfig, user: UserContext): unknown {
-  if (!flag.enabled) return flag.defaultValue; // kill switch
-  const override = __DEV__ ? FlagStorage.getOverride(flag.key) : undefined;
-  if (override !== undefined) return override; // dev override
-  for (const rule of flag.rules) {
-    if (rule.type === "user_segment" && rule.userIds?.includes(user.userId))
-      return rule.value; // exact user match
-    if (
-      rule.type === "percentage" &&
-      isInRollout(flag.key, user.userId, rule.rolloutPct)
-    )
-      return rule.value; // % rollout match
-  }
-  return flag.defaultValue; // fallback
-}
+Rules are checked in order — first match wins, fallback to `defaultValue`.
 
-// Zustand selector — only this component re-renders when this flag changes
-function useFlag<T>(key: string, defaultValue: T): T {
-  return useFlagStore((s) => (s.flags[key] as T) ?? defaultValue);
-}
+```
+evaluateFlag(flag, userId):
+  if flag.enabled is false      → return defaultValue   // kill switch
+  if dev override exists        → return override       // for testing
+  if userId is in flag.userIds  → return true           // targeted user
+  if userId bucket < trafficPct → return true           // % rollout
+  return defaultValue                                   // fallback
 ```
 
-### How % Rollouts Work (Consistent Hashing)
+### How % Rollouts Work
 
-```typescript
-function getBucket(flagKey: string, userId: string): number {
-  return Math.abs(murmurHash32(`${flagKey}:${userId}`)) % 100; // always 0–99
-}
+```
+getBucket(flagKey, userId):
+  hash(flagKey + userId) % 100  → gives a number 0–99
 ```
 
-**Why include `flagKey` in the hash?** Without it, a user at bucket 15 would be inside every flag's 20%+ rollout at the same time. Adding the flag key makes each flag's rollout independent.
+Every user always lands in the same bucket for a given flag. A `trafficPct: 20` means buckets 0–19 are in — that's 20% of users.
 
-**Raising the rollout % never removes existing users.** Going from 20% → 30% only adds users with buckets 20–29. Users already in (buckets 0–19) stay in — no one gets a broken experience mid-rollout.
+**Why hash `flagKey + userId` together?** Without the flag key, the same user would land in the same bucket for every flag — so anyone in the first 20% would be in every flag's 20% rollout. Combining them makes each flag's assignment independent.
+
+**Raising % never kicks users out.** Going 20% → 30% only adds buckets 20–29. Anyone already in (0–19) stays in.
 
 ### How A/B Variant Assignment Works
 
-```typescript
-function assignVariant(exp: ExperimentFlag, userId: string): string {
-  // Step 1: is this user even in the experiment?
-  if (getBucket(`${exp.key}:alloc`, userId) >= exp.allocation)
-    return exp.defaultValue;
+Two separate hashes — one decides if the user enters the experiment, another decides which variant they get.
 
-  // Step 2: which variant do they get?
-  const bucket = getBucket(`${exp.key}:variant`, userId);
-  let cursor = 0;
-  for (const v of exp.variants) {
-    cursor += v.weight;
-    if (bucket < cursor) return v.key;
-  }
-  return exp.defaultValue;
-}
+```
+assignVariant(experiment, userId):
+  // Step 1: does this user enter the experiment?
+  if bucket(experiment + "traffic", userId) >= trafficPct
+    return defaultValue
+
+  // Step 2: which variant?
+  bucket = bucket(experiment + "split", userId)   // 0–99
+  cursor = 0
+  for each variant:
+    cursor += variant.splitPct
+    if bucket < cursor → return variant.key
 ```
 
-Two separate hashes are used so "who enters the experiment" and "which variant they get" are not correlated.
+Example with `trafficPct: 80`, variants `control 50 / treatment_a 30 / treatment_b 20`:
+
+- Bucket 0–49 → `control`, 50–79 → `treatment_a`, 80–99 → `treatment_b` (within the 80% who entered)
 
 ### First Launch — No Blank Screen
 
-The app renders before any network call completes, so flags need a value immediately.
+| Priority | Source                         | When                                              |
+| -------- | ------------------------------ | ------------------------------------------------- |
+| 1        | MMKV (saved from last session) | Returning users — instant, synchronous            |
+| 2        | Hardcoded defaults in code     | First install, no cache yet, or API/network error |
+| 3        | Server fetch                   | Runs in background after init                     |
 
-| Priority | Source                                  | When                                   |
-| -------- | --------------------------------------- | -------------------------------------- |
-| 1        | MMKV (saved from last session)          | Returning users — instant, synchronous |
-| 2        | `flags.bootstrap.json` (bundled in app) | First install, no cache yet            |
-| 3        | Server fetch                            | Runs in background after init          |
+Default values are passed inline at every call site — `getFlag("new_checkout_ui", false)` — so there is no blank state even on first install or when the network is down.
 
-`init()` loads 1 or 2 right away, then fetches from the server in the background. If the server returns something different, only the components using changed flags re-render.
+### Syncing Flags
+
+```
+syncFlags (runs every 5 min + on app foreground):
+  fetch /api/flags
+  compare new config with saved config → find changed flag keys
+  save new config to MMKV
+  re-evaluate only changed flags → update store → affected components re-render
+  on network error → do nothing, keep serving cached flags
+```
 
 ### Exposure Tracking for A/B Tests
 
-```typescript
-export function useExperiment(key: string) {
-  const variantKey = useFlagStore((s) => s.flags[key]) as string;
-
-  useEffect(() => {
-    const id = `${key}:${userId}`;
-    if (!FlagStorage.hasExposure(id)) {
-      Analytics.sendEvent("experiment_exposure", {
-        experiment_key: key,
-        variant_key: variantKey,
-      });
-      FlagStorage.markExposure(id); // saved to MMKV so we don't double-count after restart
-    }
-  }, [variantKey]);
-
-  return { variantKey, config: getVariantConfig(key, variantKey) };
-}
 ```
+useExperiment(experimentKey):
+  variantKey = read from store
 
-Fires once per user per experiment. The analytics team uses this count as the denominator when measuring conversion rates.
+  on mount:
+    if not already logged (check MMKV):
+      send analytics event { experiment: key, variant: variantKey }
+      mark as logged in MMKV  // so we don't double-count after restart
+
+  return { variantKey, config }
+```
 
 ### Kill Switch + Fast Rollback
 
 Set `enabled: false` in the admin dashboard → all devices get `defaultValue` within the next poll (≤5 min).
 
-For faster response during an incident: keep a Server-Sent Events connection open. The dashboard pushes a notification → devices sync immediately → rollback happens in ~2–5 seconds instead of 5 minutes.
-
-### Syncing Flags Efficiently
-
-```typescript
-async function syncFlags() {
-  try {
-    const res = await fetch("/api/flags", {
-      headers: { "If-None-Match": FlagStorage.getEtag() },
-    });
-    if (res.status === 304) return; // config unchanged, skip everything
-
-    const newConfig = await res.json();
-    const changedKeys = diffFlagConfig(FlagStorage.getConfig(), newConfig);
-    FlagStorage.setConfig(newConfig);
-    FlagStorage.setEtag(res.headers.get("ETag"));
-
-    flagStore.setState((s) => {
-      const flags = { ...s.flags };
-      changedKeys.forEach((k) => {
-        flags[k] = evaluateFlag(newConfig.flags[k], userCtx);
-      });
-      return { flags };
-    });
-  } catch {
-    /* network error — keep serving cached flags silently */
-  }
-}
-```
-
-Most polls get a 304 back — almost zero bandwidth. Only components using a changed flag re-render.
+For faster response during an incident: keep a Server-Sent Events connection open. The dashboard pushes a notification → devices sync immediately → rollback in ~2–5 seconds instead of 5 minutes.
 
 ---
 
 ## 6. Real Tools to Use (instead of building from scratch)
 
-In an interview, mentioning these shows you know the ecosystem. You can say: _"I'd use Firebase Remote Config for simplicity, or LaunchDarkly if we need advanced targeting and experimentation."_
-
-| Tool                       | Best for                                            | Notes                                                                                                               |
-| -------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| **Firebase Remote Config** | Simple boolean/value flags, small teams             | Free, built into Firebase. No A/B stats built in — need to pair with Google Analytics. Easy to set up in RN.        |
-| **LaunchDarkly**           | Full feature flags + A/B testing + targeting        | Industry standard. Has a React Native SDK. Expensive but very powerful. Does on-device evaluation like this design. |
-| **Statsig**                | A/B experiments + feature gates with built-in stats | Cheaper than LaunchDarkly. Has a React Native SDK. Good dashboard for experiment results.                           |
-| **Unleash**                | Self-hosted, open source                            | Good if the company cannot send user data to third-party servers (compliance). You run it yourself.                 |
-| **Optimizely**             | Large-scale A/B testing                             | Used by big e-commerce companies. More focused on experiments than feature flags.                                   |
+| Tool                       | Best for                                            | Notes                                                                                  |
+| -------------------------- | --------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| **Firebase Remote Config** | Simple boolean/value flags, small teams             | Free, built into Firebase. No A/B stats built in — need to pair with Google Analytics. |
+| **LaunchDarkly**           | Full feature flags + A/B testing + targeting        | Industry standard. Has a React Native SDK. Does on-device evaluation like this design. |
+| **Statsig**                | A/B experiments + feature gates with built-in stats | Cheaper than LaunchDarkly. Good dashboard for experiment results.                      |
+| **Unleash**                | Self-hosted, open source                            | Good if the company cannot send user data to third-party servers (compliance).         |
 
 ### When to build vs buy
 
