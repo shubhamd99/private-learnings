@@ -5,22 +5,22 @@
 ```mermaid
 graph TD
     OPEN[App opens] -->|MMKV hit| RENDER[Render cached feed instantly]
-    RENDER --> REFRESH[Background refresh — fetch since latestCursor]
-    REFRESH -->|new posts| BANNER[Show "X new posts" banner]
+    RENDER --> REFRESH[Background refresh - fetch since latestCursor]
+    REFRESH -->|new posts| BANNER[Show N new posts banner]
     BANNER -->|user taps| PREPEND[Prepend new posts, scroll to top]
 
-    SCROLL[User scrolls near bottom] --> LOAD[Fetch next page — cursor pagination]
+    SCROLL[User scrolls near bottom] --> LOAD[Fetch next page - cursor pagination]
     LOAD -->|posts + nextCursor| APPEND[Append to feed, save nextCursor]
 
     PULL[Pull to refresh] --> LATEST[Fetch latest since top post id]
     LATEST --> MERGE[Merge new posts at top]
 
-    LIKE[User taps like] --> OPT[Optimistic update — toggle like in store]
-    OPT --> API_LIKE[POST /posts/:id/like]
-    API_LIKE -->|fail| REVERT[Revert like in store + show toast]
+    LIKE[User taps like] --> OPT[Optimistic update - toggle like in store]
+    OPT --> API_LIKE[POST /posts/id/like]
+    API_LIKE -->|fail| REVERT[Revert like in store and show toast]
 
-    SSE[SSE event: new_posts_available] --> BANNER
-    SSE[SSE event: like_count_updated] --> PATCH[Patch post in store — no full refetch]
+    SSE1[SSE - new_posts_available] --> BANNER
+    SSE2[SSE - like_count_updated] --> PATCH[Patch post in store - no full refetch]
 ```
 
 ---
