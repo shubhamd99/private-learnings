@@ -4,21 +4,66 @@ A user can browse medicines, upload a prescription if needed, add items to cart,
 
 ```mermaid
 graph TD
-    PDP[Product Detail] --> RX{Requires Prescription?}
-    RX -->|no| CART[Add to Cart]
-    RX -->|yes| RX_UPLOAD[Upload Prescription]
-    RX_UPLOAD --> UPLOAD_S3[Compress image → Upload to cloud storage]
-    UPLOAD_S3 --> POST_RX[Tell server about the prescription]
-    POST_RX --> POLL{Wait for approval}
-    POLL -->|approved| CART
-    POLL -->|rejected| REJECT[Show rejection reason + let user re-upload]
+    %% ── App launch ──────────────────────────────────────────────
+    LAUNCH[App Launch] --> AUTH{Logged in?}
+    AUTH -->|no| GUEST[Generate guest_session_token\nscopes server cart to this device]
+    GUEST --> BROWSE
+    AUTH -->|yes| RECOVER[recoverPendingPayment\ncheck MMKV for pending_payment_order_id]
+    AUTH -->|yes| RESTORE[restorePrescriptionPollers\nre-attach pollers for pending/under_review rx]
+    RECOVER --> PAY_STATUS{Order paymentStatus?}
+    PAY_STATUS -->|none saved| BROWSE[Browse / Home]
+    PAY_STATUS -->|captured| ORDER_CONFIRM[OrderConfirmation\nclear MMKV key]
+    PAY_STATUS -->|failed / cancelled| ORDER_DETAIL[OrderDetail + Reorder banner\ncart is gone — user rebuilds\nclear MMKV key]
+    PAY_STATUS -->|pending_payment| PAY_RETRY
+    RESTORE --> BROWSE
 
-    CART --> CHECKOUT[Checkout: Pick address → Delivery slot → Apply coupon]
-    CHECKOUT --> INIT_ORDER[POST /orders → server reads cart, validates, creates order]
-    INIT_ORDER --> SHEET[Show Payment Screen - Stripe/Razorpay]
-    SHEET -->|success| TRACK[Track Order]
-    SHEET -->|failure| RETRY[Retry or switch payment method]
-    TRACK --> STATUS[Push notification / poll every 30s → confirmed → packed → dispatched → delivered]
+    %% ── Prescription flow ────────────────────────────────────────
+    BROWSE --> PDP[Product Detail]
+    PDP --> RX{Prescription required?}
+    RX -->|no| ADD_CART
+    RX -->|yes| RX_UPLOAD[Upload via camera or file picker]
+    RX_UPLOAD --> RX_COMPRESS[Compress → GET pre-signed URL\nPUT to cloud storage\ndelete local file immediately]
+    RX_COMPRESS --> POST_RX[POST /prescriptions]
+    POST_RX --> POLL_RX{Await approval\npush first · poll as backup}
+    POLL_RX -->|approved| ADD_CART[POST /cart/items\nserver updates cart + pushes cart_updated\nto all other sessions]
+    POLL_RX -->|rejected| REJECT[Show rejection reason → re-upload]
+
+    %% ── Cart ─────────────────────────────────────────────────────
+    ADD_CART --> CART[Cart screen\nGET /cart on foreground · cart_updated push]
+    CART -->|rx_status_update push: rejected| RX_FLAG[Flag item RX_REJECTED\nGET /cart to reconcile\nblocks checkout]
+    RX_FLAG --> CART
+    CART --> VALIDATE[POST /cart/validate\nserver checks stock · rx status · limits]
+    VALIDATE -->|issues: OUT_OF_STOCK\nSLOT_UNAVAILABLE · RX_REJECTED| CART
+    VALIDATE -->|valid| CHECKOUT[Checkout\naddress → slot → coupon]
+
+    %% ── Order creation ───────────────────────────────────────────
+    CHECKOUT --> POST_ORDER[POST /orders\nno items payload — server reads cart]
+    POST_ORDER --> TX{DB transaction}
+    TX -->|Stripe payment intent fails| ROLLBACK[Full rollback\ncart preserved · no order created]
+    ROLLBACK --> CHECKOUT
+    TX -->|success\ncart cleared after intent created| SAVE_ID[Save pending_payment_order_id to MMKV]
+    SAVE_ID --> SHEET[Payment sheet — Stripe / Razorpay\nhandles card · UPI · 3DS · OTP]
+
+    %% ── Payment outcomes ─────────────────────────────────────────
+    SHEET -->|success| CLEAR[Delete MMKV key\nclear local cart cache]
+    CLEAR --> TRACK[OrderTracking]
+    SHEET -->|user dismissed - Canceled| PAY_RETRY[PaymentRetry\nretry same Stripe payment intent\nMMKV key kept for crash recovery]
+    SHEET -->|PAYMENT_DECLINED| PAY_RETRY
+    PAY_RETRY -->|retry| SHEET
+    PAY_RETRY -->|cancel order| CANCEL[DELETE /orders/:id\nrefund via Stripe · clear MMKV key]
+
+    %% ── Cash on delivery bypass ──────────────────────────────────
+    CHECKOUT -->|method: pod| POD[POST /orders method=pod\nconfirmed immediately\nno MMKV key written]
+    POD --> ORDER_CONFIRM
+
+    %% ── Order tracking ───────────────────────────────────────────
+    TRACK --> POLL_O[Poll GET /orders/:id every 30s\npaused when app is backgrounded\npush notifications are the fast path]
+    POLL_O --> MONO{STATUS_RANK ≥ current?}
+    MONO -->|yes — newer| UPDATE[Update order store]
+    MONO -->|no — stale response| DISCARD[Discard]
+    UPDATE --> TERMINAL{Terminal status?}
+    TERMINAL -->|delivered / cancelled| STOP[Stop polling · clear interval]
+    TERMINAL -->|no| POLL_O
 ```
 
 ---
