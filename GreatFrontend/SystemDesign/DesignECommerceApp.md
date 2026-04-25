@@ -435,6 +435,22 @@ Server: WHERE (price, id) > (:cursorPrice, :cursorId) ORDER BY price ASC, id ASC
 
 The server encodes this as an opaque base64 string — the client never needs to understand it.
 
+**Exception — when offset is the right choice:**
+
+Order history is the one place where offset (or time-bucketing) beats cursor:
+
+|                                 | Product listing       | Order history                       |
+| ------------------------------- | --------------------- | ----------------------------------- |
+| **New items added mid-list?**   | Yes — catalog is live | No — new orders prepend at top only |
+| **Items deleted or reordered?** | Possible              | Never                               |
+| **Dataset size per user**       | Millions of products  | Tens to low-hundreds                |
+| **User scrolls past page 3?**   | Common                | Rare                                |
+| **Drift / duplicate risk**      | High                  | Negligible                          |
+
+Amazon groups orders by year (`WHERE placed_at BETWEEN year_start AND year_end`) — no mid-list pagination needed within a year for most users. Apps that show a continuous "Load more" list can use offset, cursor, or a time-range query interchangeably here — all three work because the data is stable.
+
+**Rule of thumb:** Cursor for large, live, frequently-mutated-mid-list data (product catalog, search results, feeds). Offset or time-bucketing for append-only, stable, small personal lists (orders, transactions, notifications).
+
 ---
 
 ### Normalized Store — allIds + byId
