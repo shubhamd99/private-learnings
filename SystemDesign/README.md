@@ -101,7 +101,18 @@ Never jump straight into coding. Always start by clarifying the exact boundaries
 - CSR/SSR
 - Caching
 
-### 3. Tech Choices
+### 3. Architecture Patterns
+
+Choosing how the application is built and deployed at a macro level.
+
+- **Monolithic Architecture:** A single, unified codebase where all UI and logic reside together. Easy to set up but harder to scale across multiple teams.
+- **Micro-frontends:** Breaking down the frontend into smaller, independently deployable applications.
+  - _iFrames:_ The oldest isolation method; robust encapsulation but poor performance and difficult cross-communication.
+  - _Web Components:_ Custom elements that encapsulate UI and logic. Framework agnostic.
+  - _Module Federation:_ (Webpack 5) Allows JavaScript applications to dynamically load code from another application at runtime.
+  - _Microapps / Route-based:_ Different teams own different routes/pages, entirely separate applications stitched together via an NGINX proxy or a lightweight shell.
+
+### 4. Tech Choices
 
 Justifying **why** you choose a specific technology is more important than just picking what you are familiar with.
 
@@ -117,7 +128,7 @@ Justifying **why** you choose a specific technology is more important than just 
 
 ## Low Level Design (LLD)
 
-### 4. Component Architecture
+### 5. Component Architecture
 
 Break down the prioritized features into a logical hierarchy.
 
@@ -125,14 +136,19 @@ Break down the prioritized features into a logical hierarchy.
 - **Component Hierarchy:** Map out parent-child relationships.
 - **Data Sharing:** How state is passed between components.
 
-### 5. Data API & Protocols & Implementation
+### 6. Data API & Protocols & Implementation
 
 Establish a strong contract between the frontend and backend, and plan the micro-level implementation.
 
 #### Protocols
 
-- REST / Graph / RPC / SSE / GraphQL
-- JSON / Protocol Buffers
+- **Short Polling:** Client repeatedly requests data from the server at fixed intervals.
+- **Long Polling:** Client requests data; server holds the connection open until new data is available.
+- **WebSockets:** Full-duplex, bi-directional persistent connection over a single TCP connection. Great for real-time (chat, gaming).
+- **Server-Sent Events (SSE):** Unidirectional server-to-client event stream over HTTP. Great for live feeds/notifications.
+- **RPC (Remote Procedure Call):** Executing procedures on a remote server as if they were local (e.g., gRPC).
+- **REST / GraphQL**
+- **JSON / Protocol Buffers**
 
 #### Implementation Details
 
@@ -161,6 +177,77 @@ Establish a strong contract between the frontend and backend, and plan the micro
 - Theming
 - Reusable
 - Data Source
+
+---
+
+## 🔬 Deep Dive into Core Topics
+
+When building scalable frontends, these non-functional requirements dictate the underlying system design.
+
+### Availability
+
+- **Offline Support:** Ensuring the app works without a network connection using Service Workers, caching, and background sync to queue actions when offline.
+
+### Accessibility (a11y)
+
+- **Keyboard Accessibility:** Ensuring all interactive elements can be navigated using `Tab`, `Enter`, `Space`, etc.
+- **Semantics:** Using correct HTML5 tags (`<nav>`, `<main>`, `<article>`) instead of generic `<div>`s.
+- **Screen Readers:** Utilizing proper ARIA attributes, alt text, and roles so visually impaired users can navigate the app.
+
+### Consistency
+
+- **CSS Properties & Architecture:** Using methodologies like BEM, CSS Modules, or utility-first (Tailwind) to prevent style clashes.
+- **Polyfills:** Ensuring modern JavaScript and CSS features work consistently across older, legacy browsers.
+- **Design System:** A centralized library of reusable components and design tokens (colors, typography) to maintain brand consistency.
+
+### Credibility & Trust (SEO)
+
+- **On-Page SEO:** Optimizing the HTML structure. Includes Title tags, meta descriptions, semantic content hierarchy (`<h1>` to `<h6>`), and ensuring fast page performance (which directly impacts ranking).
+- **Off-Page SEO:** Backlinks from external domains, social signals, and advertisements driving traffic.
+
+### Logging & Monitoring
+
+- **Error Logging:** Capturing runtime JavaScript exceptions using tools like Sentry.
+- **User Activity & Tracking:** Analytics (e.g., Google Analytics, Mixpanel) to understand user flows.
+- **Feature Usage/Monitoring:** Tracking which specific buttons or features are used most frequently.
+- **Infra / Capacity Monitoring:** Monitoring CDN latency, API failure rates, and bundle sizes over time.
+
+### Database, Caching & State Management
+
+- **Caching:**
+  - _HTTP Caching:_ Utilizing `Cache-Control`, `ETag`, and CDN edges.
+  - _In-Memory Caching:_ Keeping frequently accessed data in variables.
+  - _Apollo Caching:_ Normalized caching specifically for GraphQL data.
+- **State Management:** Deciding between Context API (simple, low frequency), Redux (complex, global, frequent updates), or Zustand (lightweight).
+- **Storage Options:**
+  - _Local Storage:_ 5-10MB, persistent, synchronous.
+  - _Session Storage:_ Cleared when the tab closes.
+  - _Cookies:_ Max 4KB, sent with every HTTP request, used primarily for auth tokens.
+  - _IndexedDB:_ Asynchronous, handles large amounts of structured data (good for offline storage).
+
+### Security
+
+- **DDoS Mitigation:** Using Cloudflare or API rate limiting to prevent overwhelming the server.
+- **Authentication vs. Authorization:** Verifying _who_ the user is (AuthN) vs. verifying _what_ they are allowed to do (AuthZ).
+- **CSP (Content Security Policy):** An HTTP header that prevents XSS by restricting where resources (scripts, images) can be loaded from.
+- **CORS (Cross-Origin Resource Sharing):** Restricting which domains can make API requests to your server.
+- **Man in the Middle (MitM):** Enforcing HTTPS / TLS to encrypt data in transit.
+
+### Performance & Optimization
+
+- **Asset Optimization:** Minifying JavaScript/CSS, compressing images (WebP), and using proper font loading strategies.
+- **Delivery Options:** Utilizing a Content Delivery Network (CDN) to serve static assets from edge nodes close to the user.
+- **Build Assets:** Code splitting and tree-shaking to reduce bundle size.
+- **Rendering Strategies:** Using SSR (Server-Side Rendering) or SSG (Static Site Generation) for faster First Contentful Paint (FCP) and better SEO.
+- **Service Worker:** Acting as a network proxy to intercept requests and serve cached files instantly.
+- **Web Vitals:** Optimizing LCP (Largest Contentful Paint), INP (Interaction to Next Paint), and CLS (Cumulative Layout Shift).
+- **Perceived Performance:** Using skeleton screens, optimistic UI updates, and placeholders to make the app _feel_ faster than it is.
+
+### Testing
+
+- **Unit Testing:** Testing isolated functions or simple components (Jest, Mocha, Chai).
+- **Integration Testing:** Testing how multiple components work together.
+- **End-to-End (E2E) Testing:** Simulating a real user interacting with the live application in a browser (Playwright, Cypress, Selenium, Protractor).
 
 ---
 
