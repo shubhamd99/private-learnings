@@ -4,92 +4,68 @@
 
 ```mermaid
 graph TD
-    OPEN[App opens] -->|auth token| CART[GET /cart from server]
-    OPEN -->|guest token| GUEST_CART[GET /cart scoped to session token]
-    OPEN --> HOME[Render Home — banners + categories + featured]
-    HOME -->|user taps category| LIST[Product listing screen]
+    OPEN[App opens] --> AUTH{Token?}
+    AUTH -->|yes| CART[GET /cart]
+    AUTH -->|guest| GCART[GET /cart via session token]
+    AUTH --> HOME[Home screen]
 
-    LIST --> FETCH[GET /products?category=&cursor=&limit=20]
-    FETCH -->|products + nextCursor| STORE[Normalize into byId + push IDs into allIds]
-    STORE --> FLASH[FlashList renders product cards from allIds]
+    HOME -->|tap category| LIST[Product listing]
+    LIST --> FETCH[GET /products cursor-paginated]
+    FETCH --> STORE[Normalize into byId + allIds]
+    SCROLL[Near bottom] --> FETCH
 
-    SCROLL[Scroll near bottom] --> LOADMORE[Fetch next page with nextCursor]
-    LOADMORE --> DEDUP[Filter IDs already in store, append]
-
-    FILTER[User applies filter/sort] --> RESET[Clear allIds + cursors for this query]
+    FILTER[Filter / sort] --> RESET[New query key — clear allIds]
     RESET --> FETCH
 
-    CARD[User taps product card] --> DETAIL[Product Detail screen]
-    DETAIL --> FETCH_DETAIL[GET /products/:id — if not in byId]
-    FETCH_DETAIL --> PATCH_STORE[Merge full product into byId]
+    STORE -->|tap card| DETAIL[Product detail]
+    DETAIL -->|not in byId| FETCH_DETAIL[GET /products/:id]
 
-    ADD[Add to Cart] --> OPT_CART[Optimistic — increment qty in CartStore]
-    OPT_CART --> API_CART[POST /cart/items]
-    API_CART -->|fail| REVERT_CART[Revert CartStore + toast]
+    DETAIL --> ADD[Add to cart — optimistic]
+    ADD -->|fail| REVERT[Revert + toast]
+    DETAIL --> WISH[Wishlist toggle — optimistic]
 
-    WISH[Wishlist toggle] --> OPT_WISH[Optimistic — toggle in WishlistStore]
-    OPT_WISH --> API_WISH[POST or DELETE /wishlist/:productId]
-    API_WISH -->|fail| REVERT_WISH[Revert + toast]
-
-    CHECKOUT[User taps Checkout] --> STOCK[GET /cart/validate — check stock]
-    STOCK -->|out of stock| FLAG[Flag items, block proceed]
-    STOCK -->|ok| ADDR[Address screen]
-    ADDR --> PAY[Payment screen]
-    PAY --> ORDER[POST /orders → orderId]
-    ORDER --> CONFIRM[Order confirmation screen]
-    ORDER --> CLEAR_CART[Server clears cart atomically at order creation]
+    CART --> CHECKOUT[Cart validate → address → payment]
+    CHECKOUT -->|POST /orders| CONFIRM[Confirmation]
+    CONFIRM --> TRACK[Order tracking]
 ```
 
 ```mermaid
 graph TD
-    LAUNCH[App launch] --> TOKEN_CHECK{Keychain token?}
-    TOKEN_CHECK -->|valid + not expired| HOME_AUTH[Home — authenticated]
-    TOKEN_CHECK -->|expired| REFRESH[POST /auth/refresh]
-    REFRESH -->|ok| HOME_AUTH
-    REFRESH -->|fail| GUEST[Guest session — server cart scoped to session token]
-    TOKEN_CHECK -->|none| GUEST
-    GUEST --> HOME_GUEST[Home — guest]
+    LAUNCH[Launch] --> TOKEN{Keychain?}
+    TOKEN -->|valid| HOME
+    TOKEN -->|expired| REFRESH[POST /auth/refresh]
+    REFRESH -->|ok| HOME
+    REFRESH -->|fail| GUEST[Guest — server cart scoped to token]
+    TOKEN -->|none| GUEST
+    GUEST --> HOME[Home]
 
-    HOME_AUTH --> MANIFEST[GET /home/manifest → ordered widget list]
-    HOME_GUEST --> MANIFEST
-    MANIFEST --> TIER1[Render tier-1 above-fold widgets immediately]
-    TIER1 --> TIER2[Lazy-load tier-2+ widgets as user scrolls]
+    HOME --> MANIFEST[GET /home/manifest]
+    MANIFEST -->|above_fold| EAGER[Fetch tier-1 widgets immediately]
+    MANIFEST -->|below_fold| LAZY[Fetch on viewport entry]
+    EAGER & LAZY --> WIDGET[Each widget fetches own data + cursor]
 
-    WIDGET_VP[Widget enters viewport] --> FETCH_W[Fetch widget.dataUrl independently]
-    FETCH_W --> RENDER_W[Render widget content]
-    FETCH_W -->|hasMore| CURSOR_W[Per-widgetId cursor — load more on scroll end]
+    GUEST -->|protected action| LOGIN[Login / OTP / OAuth]
+    LOGIN --> KEYCHAIN[Store tokens in Keychain]
+    KEYCHAIN --> MERGE[POST /auth/login merges guest cart]
+    MERGE --> HOME
 
-    SSE_BANNER[SSE /home/banners/live] --> PATCH_BANNER[Patch hero_banner widget in store]
-    POLL_FALLBACK[30s poll if SSE fails] --> PATCH_BANNER
-
-    GUEST -->|taps Cart / Wishlist / Checkout| GATE[Auth gate modal]
-    GATE --> LOGIN[Login screen]
-    LOGIN --> OTP[Email OTP / OAuth]
-    OTP --> ISSUE[POST /auth/login → accessToken + refreshToken]
-    ISSUE --> KEYCHAIN[Store tokens in Keychain]
-    KEYCHAIN --> MERGE[Server merges guest cart on login — guestSessionToken passed to POST /auth/login]
-    MERGE --> HOME_AUTH
+    SSE[SSE /home/banners/live] -->|banner_updated| PATCH[Patch widget store]
+    SSE -->|fail| POLL[30s poll fallback]
 ```
 
 ```mermaid
 graph TD
-    PRODUCT_AUCTION[Product detail — has auction] --> BID_SCREEN[Auction screen]
-    BID_SCREEN --> WS_OPEN[WS /auctions/:id/stream]
-    WS_OPEN --> LIVE[Receive: currentBid, timeLeft, leaderboard, status]
+    PDP[Product detail — auction] --> WS[WS /auctions/:id/stream]
+    WS -->|new_bid| UPDATE[Patch currentBid + minNextBid]
+    WS -->|outbid| NOTIFY[Local push notification]
+    WS -->|closed| RESULT{Won?}
+    RESULT -->|yes| CHECKOUT[Checkout at locked price]
+    RESULT -->|no| LIST[Back to listing]
 
-    TAP_BID[User taps Place Bid] --> CONFIRM[Confirm amount modal]
-    CONFIRM --> POST_BID[POST /auctions/:id/bids]
-    POST_BID -->|accepted| LEADER[BidStore: userBidStatus = leading]
-    POST_BID -->|outbid immediately| OUTBID_RESP[Show outbid — enter higher amount]
-    POST_BID -->|error| BID_ERR[Toast — bid failed, retry]
-
-    WS_EVENT[WS push: new_bid] --> UPDATE_BID[Patch currentBid + leaderboard]
-    WS_EVENT -->|your bid outbid| PUSH[Local push notification]
-
-    TIMER[JS countdown — endsAt minus Date.now] --> ZERO{Time = 0}
-    ZERO --> CLOSE_WS[Close WS — show auction result]
-    CLOSE_WS -->|you won| ORDER_FLOW[Proceed to checkout with winning bid price]
-    CLOSE_WS -->|you lost| BROWSE[Return to product listing]
+    BID[Place Bid] --> POST[POST /auctions/:id/bids]
+    POST -->|accepted| LEAD[userBidStatus = leading]
+    POST -->|outbid| HIGHER[Show minNextBid — re-enter]
+    POST -->|error| TOAST[Toast + retry]
 ```
 
 ---
