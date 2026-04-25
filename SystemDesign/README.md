@@ -243,6 +243,94 @@ When building scalable frontends, these non-functional requirements dictate the 
 - **Web Vitals:** Optimizing LCP (Largest Contentful Paint), INP (Interaction to Next Paint), and CLS (Cumulative Layout Shift).
 - **Perceived Performance:** Using skeleton screens, optimistic UI updates, and placeholders to make the app _feel_ faster than it is.
 
+### Advanced Performance & Rendering Strategies
+
+**1. Image Optimization**
+Images are often the heaviest assets on a webpage.
+
+- **Compression:** Always compress images. Tools like TinyPNG can compress JPEGs up to 66% and PNGs up to 80% without losing visible quality.
+- **Progressive Enhancement:** Use the `<picture>` element to serve optimized formats (AVIF, WebP) with fallbacks to JPEG/PNG.
+- **Device Pixel Ratio (DPR) & Responsive Images:** Use `srcset` and `sizes` to fetch images corresponding to the device's DPR and container width to avoid blurry or bloated images.
+- **Adaptive Media Loading:** Leverage the user's connection or device capability using `navigator.connection.saveData`, `navigator.deviceMemory`, and `navigator.hardwareConcurrency` to adjust quality.
+- **Placeholders:**
+  - _Blur Effect:_ Load a tiny base64 image and use `filter: blur()` while the actual image loads.
+  - _Solid Color:_ Extract the dominant color on the backend and use it as a background placeholder.
+- **CSS Sprites:** Combine small icons into a single grid image and use `background-position` to reduce HTTP requests.
+- **Native Lazy Loading & Intersection Observer:** Use `loading="lazy"` for below-the-fold images, `loading="eager"` for hero images. Use Intersection Observer for custom logic.
+- **content-visibility:** Use `content-visibility: auto;` to defer layout and painting of off-screen content.
+
+**2. Video Optimization**
+
+- **Progressive Enhancement:** Prefer modern formats like WebM over MP4. Use multiple `<source>` tags.
+- **Replace GIFs with Videos:** GIFs are heavily unoptimized. An MP4/WebM acting as a GIF (`autoplay`, `loop`, `muted`) is significantly smaller.
+- **Responsive Poster Images:** Provide a lightweight static placeholder image (`poster`) while the video buffers.
+- **Remove Audio if Unnecessary:** Strip the audio track entirely for silent background videos.
+- **Preloading Meta Data:** Use `preload="metadata"` so the browser fetches just the dimensions and duration to save bandwidth.
+
+**3. Font Optimization**
+Fonts can cause layout shifts and block rendering.
+
+- **FOUT vs. FOIT:** Avoid FOIT (Flash of Invisible Text). Use `font-display: swap` to implement FOUT (Flash of Unstyled Text), ensuring text is immediately readable.
+- **Progressive Enhancement:** Load WOFF2 first, fallback to WOFF, then TTF.
+- **Subset Fonts:** Generate a subset of the font (e.g., only regular English characters) to drastically reduce file size.
+- **Data URI / Base64:** For very small, highly critical fonts, inline them as base64 in CSS.
+- **Preload Critical Fonts:** Use `<link rel="preload" as="font" type="font/woff2" href="..." crossorigin>` for above-the-fold fonts.
+- **Font Face Observer:** Gives programmatic JS control over font loading to switch fonts only after they've downloaded.
+
+**4. CSS Optimization**
+CSS is Render Blocking. The browser halts page rendering until the CSSOM is constructed.
+
+- **Critical CSS Extraction:** Extract the CSS required for the "above-the-fold" content and inline it in the `<head>`.
+- **Media Attribute for Lazy Loading:** Split CSS by use-case. Add `media="print"` or `media="(min-width: 768px)"` so the browser only blocks rendering for the matching CSS.
+- **Asynchronous CSS Loading:** Load non-critical CSS using `<link rel="stylesheet" href="..." media="print" onload="this.media='all'">` to unblock initial rendering.
+
+**5. JavaScript Optimization**
+JavaScript is Parser Blocking.
+
+- **Load Strategies:**
+  - `async`: Fetches in parallel, stops parsing to execute immediately once fetched. Best for independent scripts.
+  - `defer`: Fetches in parallel, waits until the entire HTML tree is parsed before executing. Best for scripts needing the DOM.
+- **ES Modules (`type="module"`):** Modern browsers natively support ES Modules. They behave like `defer` by default.
+- **Web Workers for Computation:** Offload heavy computations (image processing, large data parsing) to a Web Worker to avoid blocking the Main Thread and causing UI jank. Communicate via the `postMessage` API. (Note: Web Workers cannot access the DOM directly).
+
+**6. Resource Hinting**
+
+- `preload`: For high-priority assets needed immediately in the current navigation.
+- `prefetch`: Fetches resources for the next likely navigation, storing them in the cache (low priority).
+- `preconnect` / `dns-prefetch`: Performs early DNS/TCP/TLS handshakes to save time when connecting to third-party domains (e.g., Google Fonts).
+- `prerender`: Loads and executes an entire page in a hidden background tab. Only use when highly confident of the user's next click.
+
+**7. Service Workers and Caching**
+Act as network proxies sitting between the browser and internet. Useful for offline support and custom caching strategies (e.g., Cache-first, Network-first). Tools like Workbox and `vite-plugin-pwa` (the primary recommendation for Vite-based apps) simplify creating robust strategies for PWA support.
+
+**8. Rendering Architectures**
+
+- **CSR (Client-Side Rendering):** Slow initial load, fast subsequent navigation. Heavy JS payload.
+- **SSR (Server-Side Rendering):** Fast initial load, but higher server infra cost.
+- **SSR with Hydration (e.g., Next.js):** Server sends HTML; client "hydrates" it with event listeners.
+- **CSR with Pre-rendering / Static Generation:** Generates static HTML at build time for high performance on static pages.
+
+**9. Network Compression**
+Use Brotli (`br`) over Gzip where supported, as it generally offers much better compression rates (e.g., dropping file size from 38KB to 30KB) over standard Gzip, saving network bandwidth.
+
+**10. The Browser Render Pipeline (Critical Rendering Path)**
+Understanding how the browser converts code into pixels is crucial for performance tuning.
+
+_The Initial Load (Critical Rendering Path):_
+
+1. **Parsing:** Browser parses HTML to build the **DOM**, and CSS to build the **CSSOM**.
+2. **Style:** Combines DOM and CSSOM to create the **Render Tree** (only visible elements).
+3. **Layout (Reflow):** Calculates the exact size and geometry of elements.
+4. **Paint:** Generates drawing commands (pixels) for layers.
+5. **Composite:** The GPU combines the layers into the final screen image.
+
+_The Frame Pipeline (When JavaScript updates the page):_
+`JavaScript -> Style -> Layout -> Paint -> Composite`
+
+- **Layout Shifts (Costly):** Changing dimensions (`width`, `height`, reading `offsetHeight`) forces the browser to recalculate the pipeline from Layout downwards.
+- **Repaints (Moderate):** Changing `color` or `visibility` skips Layout but still triggers Paint and Composite.
+- **Optimized Animations (Cheap):** Changing `transform` and `opacity` skips both Layout and Paint. It runs entirely on the GPU during the Composite phase, keeping animations within the strict 16ms frame budget (for 60fps).
+
 ### Testing
 
 - **Unit Testing:** Testing isolated functions or simple components (Jest, Mocha, Chai).
