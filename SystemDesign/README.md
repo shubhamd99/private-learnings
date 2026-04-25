@@ -1,95 +1,166 @@
 # Mastering Frontend System Design
 
-Approaching a frontend system design problem requires moving systematically from abstract requirements down to granular implementation details. This guide outlines a structured approach to solving ambiguous problems at scale.
+Approaching a frontend system design problem requires moving systematically from abstract requirements down to granular implementation details. This guide outlines a structured approach to solving ambiguous problems at scale, dividing the process into High Level Design (HLD) and Low Level Design (LLD).
 
 ---
 
-## 1. Requirement Gathering & Scoping
+## Types of Frontend System Design Interviews
+
+Depending on the role and company, frontend interviews generally fall into one of these four categories, requiring a mix of Business, Product, Design, Frontend, and Backend knowledge:
+
+### 1. System Design
+
+Focuses on the end-to-end architecture.
+
+- Requirements
+- Scoping
+- Tech choices
+- Component Architecture
+- Data API & Implementation
+
+### 2. Product Sense
+
+Focuses heavily on what to build and how users interact with it, rather than technical choices.
+
+- Requirements
+- Scoping
+- Data API & Implementation
+
+### 3. UI Architecture
+
+Focuses on the frontend ecosystem and structural decisions.
+
+- Requirements
+- Scoping
+- Tech choices
+- Component Architecture
+- Data API & Implementation
+
+### 4. Machine Coding / Component Design
+
+Focuses exclusively on implementation, creating working components.
+
+- Component Architecture
+- Data API & Implementation
+
+---
+
+## High Level Design (HLD)
+
+### 1. Requirements
 
 Never jump straight into coding. Always start by clarifying the exact boundaries of the problem.
 
-### Functional Requirements
+#### Functional
 
-Define **what** the product should do.
+- B2B / B2C focus
+- **Module level thinking:** User management, Help & Support, Account management, Payment gateway, Product listing, Cart Page, Subscription/Pricing.
+- **Features/module:** Specific capabilities within modules.
 
-- **Module Level:** User Management, Payment Gateway, Product Listing, etc.
-- **Feature Level:** Search bar, add-to-cart button, review section.
-- **Focus:** Clarify if the focus is on the demand side (B2C) or supply side (B2B).
+#### Non-Functional
 
-### Non-Functional Requirements
+- Mobile/Desktop First
+- Responsive/Adaptive
+- Location/Devices/Internet
+- Accessibility
+- Asset Optimization (CSS/JS/Images)
+- Performance (FCP, LCP, TTI, CLS)
+- CSR/SSR (Client-Side Rendering / Server-Side Rendering)
+- Authentication/Authorization
+- Security
+- SEO
+- Caching
+- Offline Support
+- Micro-frontend
+- Logging & Monitoring
+- A/B testing
+- Testing
+- Internationalization (i18n) / Localization (l10n)
+- Versioning
+- PWA
+- CI/CD Pipeline
 
-Define the **quality and constraints** of the system.
-
-- **Environment:** Target devices (responsive vs. adaptive), network conditions, and accessibility.
-- **Performance:** Tracking Web Vitals (FCP, LCP, TTI).
-- **Strategy:** Rendering strategies (CSR vs. SSR), caching mechanisms, and offline support.
-- **DevOps:** CI/CD pipelines and security measures (e.g., XSS prevention).
+### 2. Scoping (Prioritization)
 
 > [!TIP]
-> **Scoping:** Work with the interviewer to prioritize the MVP. You cannot build everything in 45 minutes, so narrow the focus.
+> Work with the interviewer to prioritize the MVP. You cannot build everything in 45 minutes, so narrow the focus.
 
----
+#### Functional
 
-## 2. Making Strategic Tech Choices
+- B2B / B2C
+- **Module level thinking:** E.g., Product listing, Cart Page
+- **Features/module:** Search, Listing, Product Detail, Add Item to Cart, Add Item to Wishlist, Cart List, Add/Remove Cart Items.
+
+#### Non-Functional
+
+- Desktop
+- Responsive
+- Accessibility
+- Asset Optimization (CSS/JS/Images)
+- Performance (FCP, LCP, TTI, CLS)
+- CSR/SSR
+- Caching
+
+### 3. Tech Choices
 
 Justifying **why** you choose a specific technology is more important than just picking what you are familiar with.
 
-| Category             | Considerations                                                                |
-| :------------------- | :---------------------------------------------------------------------------- |
-| **Frameworks**       | Trade-offs of React vs. Next.js based on rendering and performance needs.     |
-| **Architecture**     | Monorepos (NX, Turborepo) vs. Microfrontends for large-scale team management. |
-| **State Management** | Context API vs. Redux; client-side DBs for offline support.                   |
-| **Build Tools**      | Asset optimization and bundling (Webpack, Rollup).                            |
+- **Library/Framework**
+- **State Management**
+- **Folder structure**
+- **Packages**
+- **Dependencies** (e.g., Canvas/SVG, WebRTC)
+- **Design System**
+- **Build Tools** (Webpack, Rollup, Parcel)
 
 ---
 
-## 3. Component Architecture
+## Low Level Design (LLD)
+
+### 4. Component Architecture
 
 Break down the prioritized features into a logical hierarchy.
 
-- **Component Trees:** Map out parent-child relationships (e.g., Main Page → Listing Component → Product Cards).
-- **Routing & Persistence:** Handle navigation and maintain state across routes.
-- **Reusability:** Separate business logic from UI components. Ensure the UI layer remains abstract, testable, and reusable.
+- **Routing**
+- **Component Hierarchy:** Map out parent-child relationships.
+- **Data Sharing:** How state is passed between components.
 
----
+### 5. Data API & Protocols & Implementation
 
-## 4. Data Modeling, APIs, and Protocols
+Establish a strong contract between the frontend and backend, and plan the micro-level implementation.
 
-Establish a strong contract between the frontend and backend.
+#### Protocols
 
-### Protocols
+- REST / Graph / RPC / SSE / GraphQL
+- JSON / Protocol Buffers
 
-Choose the right communication method:
+#### Implementation Details
 
-- **REST/GraphQL:** Standard request-response.
-- **SSE/WebSockets:** Real-time data updates.
+- Pagination / Infinite Scroll
+- Debouncing / Throttling
 
-### Data Modeling
+#### APIs
 
-- **Payload Design:** Detail the exact shape of request and response payloads.
-- **Error Handling:** Standardize how the backend passes error statuses and localized messages.
+- `getProductList()`
+- `getProductDetail()`
+- `addProductToCart()`
 
-### Implementation Details
+#### Data Modeling
 
-Dive into specific UI challenges:
+- URL
+- Method
+- Request (query params, body)
+- Response (Data, Error)
+- Status Code
 
-- **Infinite Scrolling:** Intersection Observers.
-- **Search Inputs:** Debouncing and throttling.
-- **Race Conditions:** Handling API cancellations.
+#### Component
 
----
-
-## 5. HLD vs. LLD
-
-Understand the expectation of the specific interview round.
-
-### High-Level Design (HLD)
-
-Focuses on macro-level architecture, module prioritization, broad tech choices, caching layers, and system scalability. Common in senior discussions.
-
-### Low-Level Design (LLD) / Machine Coding
-
-Focuses on micro-level implementation. Building widgets like autocomplete, customizable forms, or chat UIs. Goal: Clean, optimized code with strong component APIs.
+- state/props
+- Event Handling
+- Customization Support
+- Theming
+- Reusable
+- Data Source
 
 ---
 
@@ -101,3 +172,16 @@ Focuses on micro-level implementation. Building widgets like autocomplete, custo
 
 > [!IMPORTANT]
 > Frontend system design is less about memorizing a specific setup and more about demonstrating a **structured approach** to solving ambiguous problems at scale.
+
+---
+
+## 🛠️ Recommended Tools for System Design
+
+Familiarize yourself with these diagramming tools often used during interviews to sketch out architecture and components:
+
+- Draw.io
+- Gliffy.com
+- Lucidchart.com
+- Miro.com
+- One Note (Microsoft)
+- Jamboard (Google)
