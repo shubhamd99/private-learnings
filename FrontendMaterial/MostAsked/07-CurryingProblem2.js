@@ -1,7 +1,11 @@
-// Currying is transforming a function that takes multiple arguments
-// into a sequence of functions that each take one argument at a time.
-
 // Coercion = JS automatically converting one type to another
+
+const obj = {};
+obj.valueOf(); // returns the object itself, not useful
+// When valueOf returns the object itself, JS knows it did not get a primitive, so it then tries toString as a fallback.
+// `${obj}`        // calls obj.toString() -> "[object Object]"
+// obj + " hello"  // calls obj.toString() -> "[object Object] hello"
+
 // When JS needs to coerce an object/function to a primitive, it calls valueOf() automatically
 const obj = { valueOf: () => 10 };
 +obj; // JS thinks "I need a number"
@@ -13,11 +17,10 @@ const obj = { valueOf: () => 10 };
 
 // This is trickier — without () to signal the end,
 // we need JavaScript's type coercion to extract the value.
+// A function can do both! Functions are objects in JS — you can add properties to them.
 
 // The Problem
 // Every call like sum(1)(2)(3) must return something that can still be called AND hold a value.
-
-// A function can do both! Functions are objects in JS — you can add properties to them.
 
 function sum(a) {
   function inner(b) {

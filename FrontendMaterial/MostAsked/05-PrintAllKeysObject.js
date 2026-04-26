@@ -10,11 +10,10 @@ function printAllKeysInObject(obj, prefix = "") {
     // we just use the current key as is.
     const fullKey = prefix ? `${prefix}.${key}` : key;
 
+    // real objects, avoid null checks
     if (typeof obj[key] === "object" && obj[key] !== null) {
-      // object.assign is used to merge the result of the recursive call
-      // into the current result object. This way,
-      // we accumulate all the key-value pairs from the nested objects \
-      // into a single flat object with dot-separated keys.
+      // object.assign is used to merge the result of the recursive call into the current result object.
+      // This way, we accumulate all the key-value pairs from the nested objects into a single flat object with dot-separated keys.
       Object.assign(result, printAllKeysInObject(obj[key], fullKey));
     } else {
       result[fullKey] = obj[key];

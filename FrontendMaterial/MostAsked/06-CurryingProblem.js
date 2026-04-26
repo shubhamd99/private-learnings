@@ -1,5 +1,7 @@
 // Currying is transforming a function that takes multiple arguments
 // into a sequence of functions that each take one argument at a time.
+// use cases: partial application (pre-fill some arguments for reuse), function composition,
+// event handlers with config, API calls with base url, validation with reusable rules
 
 // ⁠Currying Problem: Define sum function ending with (). Example -> sum(0)(1)(2)(3)(4)(5)()
 

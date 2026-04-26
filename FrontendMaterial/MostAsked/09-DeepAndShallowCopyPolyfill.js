@@ -2,6 +2,9 @@
 
 const obj = { a: 1, b: { c: 2 } };
 
+// Built in JS method
+JSON.parse(JSON.stringify(obj));
+
 // Shallow copy — nested objects are still REFERENCED
 // const shallow = { ...obj };
 // shallow.b.c = 99;
@@ -20,8 +23,8 @@ function shallowCopy2(obj) {
   const result = {};
 
   for (let key in obj) {
+    // ignore inherited properties
     if (obj.hasOwnProperty(key)) {
-      // ignore inherited properties
       result[key] = obj[key]; // just copy reference
     }
   }
@@ -50,6 +53,7 @@ function deepCopy(obj) {
   // handle objects
   const result = {};
   for (let key in obj) {
+    // ignore inherited properties
     if (obj.hasOwnProperty(key)) {
       result[key] = deepCopy(obj[key]); // recurse into every value
     }

@@ -1,12 +1,18 @@
 // Shuffle array in random manner
-// Fisher-Yates Shuffle Algorithm
+// Fisher-Yates Shuffle Algorithm - It is an algorithm to randomly shuffle an array in place.
+// Walk from the last element to the first. At each position i, pick a random index j between 0 and i inclusive, then swap nums[i] with nums[j].
+
+// Why it works
+// Each element has an equal probability of ending up in any position
+// It gives a truly uniform shuffle, meaning every possible permutation of the array is equally likely.
 
 function shuffleArray(arr) {
   const result = [...arr];
 
-  // Start from the last element and swap one by one
+  // Start from the last element and swap one by one.
+  // i > 0 just skips that useless final iteration. The shuffle is already complete by the time i reaches 0.
   for (let i = result.length - 1; i > 0; i--) {
-    const randomIndex = Math.floor(Math.random() * (i + 1)); // Generate a random index from 0 to i
+    const randomIndex = Math.floor(Math.random() * (i + 1)); // Generate a random index from 0 to i, i + 1 because zero based index
 
     // swap
     [result[i], result[randomIndex]] = [result[randomIndex], result[i]];
