@@ -4,33 +4,29 @@ import { useState, useId, useRef, useEffect, InputHTMLAttributes } from "react";
  * Type definition for a single checkbox item.
  * Supports nesting via the 'children' property.
  */
-type CheckboxItem = {
-  id: number;
-  name: string;
-  checked: boolean | "indeterminate";
-  children?: CheckboxItem[];
-};
+// type CheckboxItem = {
+//   id: number;
+//   name: string;
+//   checked: boolean | "indeterminate";
+//   children?: CheckboxItem[];
+// };
 
 /**
  * Represents the possible values for a checkbox's checked state.
  */
-type CheckboxValue = boolean | "indeterminate";
+// type CheckboxValue = boolean | "indeterminate";
 
 /**
  * Presentational component for a single checkbox input.
  * Handles the 'indeterminate' state manually since React doesn't support it via props.
+ *
+ * @param {Object} props - The component props.
+ * @param {boolean|"indeterminate"} props.checked - The checked state.
+ * @param {string} props.label - The text label.
  */
-function CheckboxInput({
-  checked,
-  label,
-  ...props
-}: Readonly<{
-  checked: CheckboxValue;
-  label: string;
-}> &
-  Omit<InputHTMLAttributes<HTMLInputElement>, "checked">) {
+function CheckboxInput({ checked, label, ...props }) {
   const id = useId();
-  const ref = useRef<HTMLInputElement | null>(null);
+  const ref = (useRef < HTMLInputElement) | (null > null);
 
   // Synchronize the 'indeterminate' DOM property with the 'checked' prop.
   useEffect(() => {
@@ -58,14 +54,12 @@ function CheckboxInput({
 
 /**
  * Recursive component that renders a list of checkboxes and their children.
+ *
+ * @param {Object} props - The component props.
+ * @param {Array} props.items - List of checkbox items.
+ * @param {Function} props.onCheck - Callback for when a checkbox is toggled.
  */
-function CheckboxList({
-  items,
-  onCheck,
-}: Readonly<{
-  items: ReadonlyArray<CheckboxItem>;
-  onCheck: (value: boolean, indices: ReadonlyArray<number>) => void;
-}>) {
+function CheckboxList({ items, onCheck }) {
   return (
     <ul>
       {items.map((item, index) => (
@@ -99,11 +93,11 @@ function CheckboxList({
 /**
  * Recursively set descendants of the modified checkbox to the new value.
  * When a parent is checked/unchecked, all its children should follow.
+ *
+ * @param {Object} checkboxItem - The item to update.
+ * @param {boolean} checked - The new checked state.
  */
-function updateCheckboxAndDescendants(
-  checkboxItem: CheckboxItem,
-  checked: boolean,
-) {
+function updateCheckboxAndDescendants(checkboxItem, checked) {
   checkboxItem.checked = checked;
   if (!checkboxItem.children) {
     return;
@@ -118,11 +112,11 @@ function updateCheckboxAndDescendants(
  * Update checkbox states based on the modified checkbox's new state.
  * Only direct ancestors of the modified checkbox are affected.
  * It ensures parents show 'indeterminate' if children are mixed.
+ *
+ * @param {Object} checkboxItem - The parent item to evaluate.
+ * @param {number[]} indices - Path of indices to the modified checkbox.
  */
-function resolveCheckboxStates(
-  checkboxItem: CheckboxItem,
-  indices: ReadonlyArray<number>,
-) {
+function resolveCheckboxStates(checkboxItem, indices) {
   // Traverse down to the target node first (post-order traversal logic).
   if (indices.length > 0 && checkboxItem.children) {
     resolveCheckboxStates(checkboxItem.children[indices[0]], indices.slice(1));
@@ -146,11 +140,11 @@ function resolveCheckboxStates(
   // If all children are checked, the parent is checked.
   if (checkedChildren === checkboxItem.children.length) {
     checkboxItem.checked = true;
-  } 
+  }
   // If all children are unchecked, the parent is unchecked.
   else if (uncheckedChildren === checkboxItem.children.length) {
     checkboxItem.checked = false;
-  } 
+  }
   // Otherwise, the parent is in an indeterminate state.
   else {
     checkboxItem.checked = "indeterminate";
@@ -160,12 +154,11 @@ function resolveCheckboxStates(
 /**
  * The main container component for the nested checkbox feature.
  * Manages the top-level state and handles the complex update logic.
+ *
+ * @param {Object} props - The component props.
+ * @param {Array} props.defaultCheckboxData - Initial structure and state of checkboxes.
  */
-export default function Checkboxes({
-  defaultCheckboxData,
-}: Readonly<{
-  defaultCheckboxData: ReadonlyArray<CheckboxItem>;
-}>) {
+export default function Checkboxes({ defaultCheckboxData }) {
   const [checkboxData, setCheckboxData] = useState(defaultCheckboxData);
 
   return (

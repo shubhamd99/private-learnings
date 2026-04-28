@@ -1,18 +1,12 @@
 import React, { useState } from "react";
 
-export type FileData = Readonly<{
-  id: number;
-  name: string;
-  children?: ReadonlyArray<FileData>;
-}>;
+// type FileData = Readonly<{
+//   id: number;
+//   name: string;
+//   children?: ReadonlyArray<FileData>;
+// }>;
 
-function FileObject({
-  file,
-  level,
-}: Readonly<{
-  file: FileData;
-  level: number;
-}>) {
+function FileObject({ file, level }) {
   const [expanded, setExpanded] = useState(false);
   const { children: fileChildren, name: fileName } = file;
   // If the children field is present, the item is a directory.
@@ -44,13 +38,7 @@ function FileObject({
   );
 }
 
-function FileList({
-  fileList,
-  level,
-}: Readonly<{
-  fileList: ReadonlyArray<FileData>;
-  level: number;
-}>) {
+function FileList({ fileList, level }) {
   const directories = fileList.filter((fileItem) => fileItem.children);
   directories.sort((a, b) => a.name.localeCompare(b.name));
 
@@ -68,9 +56,7 @@ function FileList({
   );
 }
 
-export default function FileExplorer({
-  data,
-}: Readonly<{ data: ReadonlyArray<FileData> }>) {
+export default function FileExplorer({ data }) {
   return (
     <div>
       <FileList fileList={data} level={1} />
