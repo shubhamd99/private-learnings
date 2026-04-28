@@ -82,13 +82,16 @@
 
 **When to apply:** Sorted array, find pair or triplet, remove duplicates, palindrome check.
 
-| #   | Problem                   | LC ID | Difficulty |
-| --- | ------------------------- | ----- | ---------- |
-| 1   | Two Sum II                | 167   | Easy       |
-| 2   | 3Sum                      | 15    | Medium     |
-| 3   | 4Sum                      | 18    | Medium     |
-| 4   | Container With Most Water | 11    | Medium     |
-| 5   | Trapping Rain Water       | 42    | Hard       |
+| #   | Problem                                              | LC ID | Difficulty |
+| --- | ---------------------------------------------------- | ----- | ---------- |
+| 1   | Two Sum II                                           | 167   | Easy       |
+| 2   | 3Sum                                                 | 15    | Medium     |
+| 3   | 4Sum                                                 | 18    | Medium     |
+| 4   | Container With Most Water                            | 11    | Medium     |
+| 5   | Trapping Rain Water                                  | 42    | Hard       |
+| 6   | Valid Palindrome                                     | 125   | Easy       |
+| 7   | Longest Palindromic Substring (expand around center) | 5     | Medium     |
+| 8   | Palindromic Substrings Count (expand around center)  | 647   | Medium     |
 
 ### DAY 2 — Three Pointers (Dutch National Flag)
 
@@ -115,22 +118,26 @@
 
 **When to apply:** Fixed size K window, track property inside window.
 
-| #   | Problem                     | LC ID | Difficulty |
-| --- | --------------------------- | ----- | ---------- |
-| 1   | Maximum Average Subarray I  | 643   | Easy       |
-| 2   | Find All Anagrams in String | 438   | Medium     |
-| 3   | Sliding Window Maximum      | 239   | Hard       |
+| #   | Problem                                   | LC ID | Difficulty |
+| --- | ----------------------------------------- | ----- | ---------- |
+| 1   | Maximum Average Subarray I                | 643   | Easy       |
+| 2   | Find All Anagrams in String               | 438   | Medium     |
+| 3   | Sliding Window Maximum                    | 239   | Hard       |
+| 4   | Substring with Concatenation of All Words | 30    | Hard       |
 
 ### DAY 5 — Sliding Window Variable
 
 **When to apply:** Expand right always, shrink left when condition breaks.
 
-| #   | Problem                                        | LC ID | Difficulty |
-| --- | ---------------------------------------------- | ----- | ---------- |
-| 1   | Longest Substring Without Repeating Characters | 3     | Medium     |
-| 2   | Minimum Window Substring                       | 76    | Hard       |
-| 3   | Longest Repeating Character Replacement        | 424   | Medium     |
-| 4   | Permutation in String                          | 567   | Medium     |
+| #   | Problem                                                | LC ID | Difficulty |
+| --- | ------------------------------------------------------ | ----- | ---------- |
+| 1   | Longest Substring Without Repeating Characters         | 3     | Medium     |
+| 2   | Minimum Window Substring                               | 76    | Hard       |
+| 3   | Longest Repeating Character Replacement                | 424   | Medium     |
+| 4   | Permutation in String                                  | 567   | Medium     |
+| 5   | Longest Substring with At Most Two Distinct Characters | 159   | Medium     |
+| 6   | Longest Substring with At Most K Distinct Characters   | 340   | Medium     |
+| 7   | Minimum Size Subarray Sum                              | 209   | Medium     |
 
 ### DAY 6 — Hashing and Prefix Sum
 
@@ -165,6 +172,7 @@
 | 2   | First Bad Version                    | 278   | Easy       |
 | 3   | Search in Rotated Sorted Array       | 33    | Medium     |
 | 4   | Find Minimum in Rotated Sorted Array | 153   | Medium     |
+| 5   | Find First and Last Position         | 34    | Medium     |
 
 ### DAY 9 — Binary Search Modified
 
@@ -206,9 +214,10 @@
 | --- | ----------------------------- | ----- | ---------- |
 | 1   | Reverse Linked List           | 206   | Easy       |
 | 2   | Merge Two Sorted Lists        | 21    | Easy       |
-| 3   | Remove Nth Node From End      | 19    | Medium     |
-| 4   | Reorder List                  | 143   | Medium     |
-| 5   | Copy List with Random Pointer | 138   | Medium     |
+| 3   | Add Two Numbers               | 2     | Medium     |
+| 4   | Remove Nth Node From End      | 19    | Medium     |
+| 5   | Reorder List                  | 143   | Medium     |
+| 6   | Copy List with Random Pointer | 138   | Medium     |
 
 ### DAY 13 — Stack and Monotonic Stack
 
@@ -361,14 +370,15 @@
 
 **When to apply:** Generate all subsets, permutations, combinations, constraint satisfaction.
 
-| #   | Problem                 | LC ID | Difficulty |
-| --- | ----------------------- | ----- | ---------- |
-| 1   | Subsets                 | 78    | Medium     |
-| 2   | Permutations            | 46    | Medium     |
-| 3   | Combination Sum         | 39    | Medium     |
-| 4   | Word Search             | 79    | Medium     |
-| 5   | N-Queens                | 51    | Hard       |
-| 6   | Palindrome Partitioning | 131   | Medium     |
+| #   | Problem                             | LC ID | Difficulty |
+| --- | ----------------------------------- | ----- | ---------- |
+| 1   | Subsets                             | 78    | Medium     |
+| 2   | Permutations                        | 46    | Medium     |
+| 3   | Letter Combinations of Phone Number | 17    | Medium     |
+| 4   | Combination Sum                     | 39    | Medium     |
+| 5   | Word Search                         | 79    | Medium     |
+| 6   | N-Queens                            | 51    | Hard       |
+| 7   | Palindrome Partitioning             | 131   | Medium     |
 
 ### DAY 26 — 1D DP and Memoization to Tabulation
 
@@ -393,10 +403,12 @@
 | --- | -------------------------- | ----- | ---------- |
 | 1   | Unique Paths               | 62    | Medium     |
 | 2   | Longest Common Subsequence | 1143  | Medium     |
-| 3   | Edit Distance              | 72    | Medium     |
-| 4   | Maximal Square             | 221   | Medium     |
-| 5   | Interleaving String        | 97    | Medium     |
-| 6   | Burst Balloons             | 312   | Hard       |
+| 3   | Distinct Subsequences      | 115   | Hard       |
+| 4   | Minimum Window Subsequence | 727   | Hard       |
+| 5   | Edit Distance              | 72    | Medium     |
+| 6   | Maximal Square             | 221   | Medium     |
+| 7   | Interleaving String        | 97    | Medium     |
+| 8   | Burst Balloons             | 312   | Hard       |
 
 ### DAY 28 — Matrix Manipulation and Bit Manipulation
 
@@ -407,11 +419,12 @@
 | 1   | Rotate Image        | 48    | Medium     |
 | 2   | Spiral Matrix       | 54    | Medium     |
 | 3   | Set Matrix Zeroes   | 73    | Medium     |
-| 4   | Single Number       | 136   | Easy       |
-| 5   | Number of 1 Bits    | 191   | Easy       |
-| 6   | Missing Number      | 268   | Easy       |
-| 7   | Sum of Two Integers | 371   | Medium     |
-| 8   | Counting Bits       | 338   | Easy       |
+| 4   | Search a 2D Matrix  | 74    | Medium     |
+| 5   | Single Number       | 136   | Easy       |
+| 6   | Number of 1 Bits    | 191   | Easy       |
+| 7   | Missing Number      | 268   | Easy       |
+| 8   | Sum of Two Integers | 371   | Medium     |
+| 9   | Counting Bits       | 338   | Easy       |
 
 ### DAY 29 — Segment Tree, BIT and Recursion to Iteration
 
@@ -498,15 +511,26 @@
 | 5   | Expression Add Operators              | 282   | Hard       |
 | 6   | Race Car                              | 818   | Hard       |
 
+### DAY 36 — Substring and Subsequence DP
+
+**When to apply:** Longest or count of substrings or subsequences, palindrome based problems, two string comparison.
+
+| #   | Problem                    | LC ID | Difficulty |
+| --- | -------------------------- | ----- | ---------- |
+| 1   | Longest Common Subsequence | 1143  | Medium     |
+| 2   | Distinct Subsequences      | 115   | Hard       |
+| 3   | Minimum Window Subsequence | 727   | Hard       |
+| 4   | Edit Distance              | 72    | Medium     |
+
 ---
 
 ## Total Summary
 
 | Metric         | Count |
 | -------------- | ----- |
-| Total Days     | 35    |
-| Total Patterns | 43    |
-| Total Problems | 172   |
-| **Easy**       | 38    |
-| **Medium**     | 102   |
-| **Hard**       | 32    |
+| Total Days     | 36    |
+| Total Patterns | 44    |
+| Total Problems | 189   |
+| **Easy**       | 39    |
+| **Medium**     | 113   |
+| **Hard**       | 37    |
