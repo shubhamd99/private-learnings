@@ -91,7 +91,7 @@
 | 5   | Trapping Rain Water                                  | 42    | Hard       |
 | 6   | Valid Palindrome                                     | 125   | Easy       |
 | 7   | Longest Palindromic Substring (expand around center) | 5     | Medium     |
-| 8   | Palindromic Substrings Count (expand around center)  | 647   | Medium     |
+| 8   | Is Subsequence                                       | 392   | Easy       |
 
 ### DAY 2 — Three Pointers (Dutch National Flag)
 
@@ -531,6 +531,6 @@
 | Total Days     | 36    |
 | Total Patterns | 44    |
 | Total Problems | 189   |
-| **Easy**       | 39    |
-| **Medium**     | 113   |
+| **Easy**       | 40    |
+| **Medium**     | 112   |
 | **Hard**       | 37    |
