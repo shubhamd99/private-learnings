@@ -2,7 +2,7 @@
 
 A minimal crowdfunding app built with React + TypeScript + Vite.
 
-![Preview](@preview/01.png)
+![Preview](preview/01.png)
 
 ## Features
 
