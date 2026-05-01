@@ -98,3 +98,27 @@ const Example2 = () => {
 // "hello" // after 2500 milliseconds
 // "hello" // after 2500 milliseconds of last call
 // "hello" // after 2500 milliseconds of last call
+
+const useThrottle2 = (fn, wait) => {
+  const timerId = useRef(null);
+
+  return useCallback(
+    (...args) => {
+      if (timerId.current) return; // already waiting, ignore
+
+      fn(...args); // call immediately
+
+      timerId.current = setTimeout(() => {
+        timerId.current = null; // reset after wait
+      }, wait);
+    },
+    [fn, wait],
+  );
+};
+
+// const handleScroll = useThrottle(() => {
+//   console.log("scroll fired");
+// }, 500);
+
+// // attach to scroll event
+// <ScrollView onScroll={handleScroll} />
