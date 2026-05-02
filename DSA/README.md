@@ -129,15 +129,13 @@
 
 **When to apply:** Expand right always, shrink left when condition breaks.
 
-| #   | Problem                                                | LC ID | Difficulty |
-| --- | ------------------------------------------------------ | ----- | ---------- |
-| 1   | Longest Substring Without Repeating Characters         | 3     | Medium     |
-| 2   | Minimum Window Substring                               | 76    | Hard       |
-| 3   | Longest Repeating Character Replacement                | 424   | Medium     |
-| 4   | Permutation in String                                  | 567   | Medium     |
-| 5   | Longest Substring with At Most Two Distinct Characters | 159   | Medium     |
-| 6   | Longest Substring with At Most K Distinct Characters   | 340   | Medium     |
-| 7   | Minimum Size Subarray Sum                              | 209   | Medium     |
+| #   | Problem                                        | LC ID | Difficulty |
+| --- | ---------------------------------------------- | ----- | ---------- |
+| 1   | Longest Substring Without Repeating Characters | 3     | Medium     |
+| 2   | Minimum Window Substring                       | 76    | Hard       |
+| 3   | Longest Repeating Character Replacement        | 424   | Medium     |
+| 4   | Permutation in String                          | 567   | Medium     |
+| 5   | Minimum Size Subarray Sum                      | 209   | Medium     |
 
 ### DAY 6 — Hashing and Prefix Sum
 
@@ -530,7 +528,7 @@
 | -------------- | ----- |
 | Total Days     | 36    |
 | Total Patterns | 44    |
-| Total Problems | 189   |
+| Total Problems | 187   |
 | **Easy**       | 40    |
-| **Medium**     | 112   |
+| **Medium**     | 110   |
 | **Hard**       | 37    |
