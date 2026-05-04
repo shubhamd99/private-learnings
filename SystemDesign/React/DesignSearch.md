@@ -385,7 +385,7 @@ With the basics out of the way, this section dives into the production concerns 
 
 ### 1. Network
 
-Autocomplete fires a request on nearly every keystroke, so the network layer has to tolerate in-flight responses arriving out of order, transient failures, and dropped connectivity.
+Autocomplete can generate many requests while the user types, even with debounce. The network layer has to tolerate in-flight responses arriving out of order, transient failures, and dropped connectivity.
 
 #### Handling concurrent requests/race conditions
 
@@ -400,8 +400,8 @@ Autocomplete should not aggressively retry every failed keystroke. Use timeouts,
 If the device has entirely lost its network connection:
 
 - Read purely from the cache.
-- Not fire any requests to avoid wasting CPU cycles.
-- Indicate somewhere in the component that there's no network connection.
+- Do not fire new requests.
+- Show an offline state if cached results are unavailable.
 
 ### 2. Cache
 
@@ -458,7 +458,7 @@ _Pros:_ Fast lookup and non-duplicated data. Best for long-lived applications.
 
 #### Caching strategy
 
-- **Cache location:** In-memory frontend store, not a separate backend caching layer.
+- **Frontend cache location:** In-memory Zustand/Redux store.
 - **Cache key:** Normalized query string.
 - **Initial suggestions key:** Store recent, popular, or trending suggestions under the empty string key `""`.
 - **Cache value:** Ordered `resultIds`, `fetchedAt`, `expiresAt`, and `nextCursor`.
@@ -470,16 +470,18 @@ _Pros:_ Fast lookup and non-duplicated data. Best for long-lived applications.
 
 ### 3. Performance
 
-- **Debouncing/throttling:** Default to a `300ms` debounce and reach for throttle only when scrolling. Debounce fires the request after the user pauses.
-- **Memory usage:** Purge cache when the browser is idle or when memory exceeds a threshold.
-- **Virtualized lists:** Only render what is visible to the user ("windowing"). Recycle DOM nodes instead of creating new ones to improve scrolling and rendering performance for large lists.
+- **Debouncing:** Default to a `300ms` debounce. Debounce fires the request after the user pauses typing.
+- **Minimum query length:** Avoid low-value requests until the query has at least 2 or 3 characters, unless fetching initial suggestions for `""`.
+- **Memory usage:** Evict expired cache entries during idle time or when cache size crosses a threshold.
+- **Pagination:** Keep the first page small. Load more with `nextCursor` only after user intent, either infinite scroll near the bottom or a "View more" action.
+- **Virtualized lists:** Usually not needed for a small autocomplete popup, but useful if the component supports large scrollable result lists.
 
 ### 4. User Experience
 
 - **Autofocus:** Add autofocus if the user has a high intent to search (like on Google's homepage).
 - **Handle different states:** Show spinners for loading, error messages with retry buttons, or "no network" states.
 - **Mobile-friendliness:** Ensure tap targets are large enough. Use `autocapitalize="off"`, `autocomplete="off"`, `autocorrect="off"`, and `spellcheck="false"`.
-- **Typos in search (Fuzzy Search):** Use edit distance (e.g. Levenshtein distance) for client-side filtering or send query as-is for server-side fuzzy matching.
+- **Typos in search (Fuzzy Search):** Good to have. Prefer server-side fuzzy matching for consistency; client-side edit distance can be used only for small local lists.
 - **Positioning:** If the component is at the bottom of the window, render results above the input.
 
 ### 5. Accessibility
@@ -489,9 +491,9 @@ Follow the WAI-ARIA combobox pattern, do not invent your own roles.
 #### Screen readers
 
 - Use semantic HTML (e.g., `<ul>`, `<li>` or `role="listbox"`, `role="option"`).
-- `aria-label` for `<input>`.
-- `role="combobox"` for `<input>`.
-- `aria-haspopup` to indicate interactive popup.
+- `aria-label` or visible `<label>` for the input.
+- `role="combobox"` for the input or combobox wrapper.
+- `aria-controls` to connect the input to the popup listbox.
 - `aria-expanded` to indicate if the popup is visible.
 - `aria-live` region to notify screen reader users when new results appear.
 - `aria-autocomplete` (`"both"`, `"list"`, or `"inline"`).
@@ -507,7 +509,7 @@ Follow the WAI-ARIA combobox pattern, do not invent your own roles.
 
 ## Summary
 
-Centralize traffic through a controller. Normalize the cache around `CACHE_ENTRY` and `resultIds`. Lean on platform primitives for the rest (debounce, ARIA roles, etc.).
+Centralize orchestration in the controller, keep query/results state in the frontend store, normalize result entities around `queryCache` and `resultsById`, and lean on platform primitives for debounce, ARIA roles, keyboard navigation, and request cancellation.
 
 ### Comparing Google, Facebook, and X search components
 
@@ -518,6 +520,56 @@ Centralize traffic through a controller. Normalize the cache around `CACHE_ENTRY
 | role              | `"combobox"` | Absent    | `"combobox"` |
 | aria-autocomplete | `"both"`     | `"list"`  | `"list"`     |
 
+### Cheat Sheet
+
+- **Flow:** User types -> controller debounces -> store cache check -> network on miss -> store update -> UI render.
+- **Cache:** Zustand/Redux in-memory cache. `queryCache[query]` stores ordered `resultIds`, `expiresAt`, and `nextCursor`; `resultsById` stores normalized entities.
+- **Initial suggestions:** Store under `queryCache[""]`.
+- **Pagination:** Use cursor pagination. If `nextCursor` exists, show "View more" or trigger infinite scroll.
+- **Race handling:** Use `currentRequestId` or `AbortController`; only latest query can write to store.
+- **Network:** Timeout, normalized errors, optional one small backoff retry if query is still current.
+- **Backend API:** `GET /api/search/suggestions?query=&limit=&cursor=`.
+- **Accessibility:** Follow WAI-ARIA combobox/listbox pattern, keyboard navigation, `aria-expanded`, `aria-controls`, `aria-activedescendant`.
+- **Customization:** `classNames` for CSS slots, render props for advanced UI.
+- **Fuzzy:** Prefer backend fuzzy search; client fuzzy only for small local/cached lists.
+
+### Extras: Fuzzy Search
+
+Fuzzy search means returning useful results even when the user makes a typo or types an approximate query.
+
+Example:
+
+- User types `iphnoe`
+- We still show `iPhone`
+
+Fuzzy search is good to have, not required for the first version. Prefer backend fuzzy search for real products because the backend has the full index, ranking signals, synonyms, popularity, and language-specific analyzers.
+
+#### Client-side fuzzy search
+
+Client-side fuzzy search means checking the user's query against a small list already present in the browser.
+
+- **Use for:** recent searches, trending suggestions, cached suggestions, or a small static list.
+- **Do not use for:** full product/user/document search. The list is too large and backend ranking will be better.
+- **How it works:** Compare the typed query with local items and allow 1-2 small mistakes.
+- **Example:** `iphne` can match `iphone` because only one character is missing.
+- **Implementation:** Use a small library like Fuse.js, or simple edit-distance algorithms such as Levenshtein or Damerau-Levenshtein for very small lists.
+- **Ranking:** show exact/prefix matches first, then typo matches.
+
+#### Backend fuzzy search
+
+Backend should own fuzzy search for production autocomplete.
+
+- **Elasticsearch/OpenSearch:** Use fuzzy query with `fuzziness: AUTO`, `prefix_length`, and `max_expansions`; combine with completion suggester/search-as-you-type fields for autocomplete.
+- **Lucene/Solr:** Use `FuzzyQuery`, backed by edit distance with controls like `maxEdits`, `prefixLength`, and `maxExpansions`.
+- **Algolia:** Use built-in typo tolerance, typo ranking, synonyms, splitting/concatenation, and typo thresholds.
+- **Custom service:** Use an inverted index with edge n-grams for prefix matching, synonyms, typo-tolerant candidate generation, and ranking by typo count + popularity.
+
+#### What we pick
+
+- First version: no fuzzy requirement, only exact/prefix matching from backend.
+- Good to have: backend typo tolerance for 1-2 edits.
+- Client fallback: fuzzy only over `queryCache[""]`, recent searches, or currently cached results.
+
 ---
 
 ## References
@@ -526,7 +578,12 @@ Centralize traffic through a controller. Normalize the cache around `CACHE_ENTRY
   - The Life of a Typeahead Query
   - Query Autocomplete from LLMs
 - **Accessibility patterns:**
-  - Building an accessible autocomplete control
-  - Combobox pattern | W3C ARIA APG
+  - [Combobox pattern | W3C ARIA APG](https://www.w3.org/WAI/ARIA/apg/patterns/combobox/)
+  - [MDN combobox role](https://developer.mozilla.org/en-US/docs/Web/Accessibility/ARIA/Reference/Roles/combobox_role)
+- **Fuzzy search:**
+  - [Elasticsearch fuzzy query](https://www.elastic.co/docs/reference/query-languages/query-dsl/query-dsl-fuzzy-query/)
+  - [OpenSearch fuzzy query](https://docs.opensearch.org/latest/query-dsl/term/fuzzy/)
+  - [Lucene FuzzyQuery](https://lucene.apache.org/core/10_0_0/core/org/apache/lucene/search/FuzzyQuery.html)
+  - [Algolia typo tolerance](https://www.algolia.com/doc/guides/managing-results/optimize-search-results/typo-tolerance/)
 - **Combobox implementations:**
   - React Select
