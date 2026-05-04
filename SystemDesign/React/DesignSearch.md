@@ -62,31 +62,34 @@ These are questions you should ask the interviewer to refine the scope before lo
 ## A - Architecture / High-Level Design
 
 ```mermaid
-graph TD
-    USER[User] --> INPUT
+flowchart LR
+    USER[User]
+    SERVER[Search API Server]
+    CONFIG[Config / Render Props / Event Callbacks]
 
     subgraph AUTOCOMPLETE[Autocomplete Component]
-        INPUT[Input UI]
-        RESULTS[Results UI]
-        CONTROLLER[Controller]
+        direction LR
+        subgraph UI[UI Layer]
+            direction TB
+            INPUT[Input UI]
+            RESULTS[Results UI]
+        end
+
+        CONTROLLER[Controller + Debounce]
         STORE[Store / UI State + Query Cache]
-        REQUEST[Debounce + Request Manager]
-        A11Y[Accessibility Helpers]
+        NETWORK[Network Manager]
     end
 
-    INPUT --> CONTROLLER[Controller]
-    RESULTS --> CONTROLLER
-    CONTROLLER --> STORE[Store / UI State + Query Cache]
-    CONTROLLER --> REQUEST
-    REQUEST --> SERVER[Search API Server]
-    SERVER --> REQUEST
-    REQUEST --> CONTROLLER
-    STORE --> RESULTS
-    A11Y --> INPUT
-    A11Y --> RESULTS
-    CONFIG[Config / Render Props / Event Callbacks] --> INPUT
-    CONFIG --> RESULTS
-    CONFIG --> CONTROLLER
+    USER -->|type / focus / select / view more| UI
+    INPUT -->|query changes| CONTROLLER
+    RESULTS -->|selection / load more| CONTROLLER
+    CONTROLLER -->|read/write state| STORE
+    STORE -->|render state| UI
+    CONTROLLER -->|debounced cache miss / next page| NETWORK
+    NETWORK -->|fetch suggestions with cursor| SERVER
+    SERVER --> NETWORK
+    NETWORK -->|data / error| CONTROLLER
+    CONFIG -.-> AUTOCOMPLETE
 ```
 
 ### Input field UI
@@ -97,24 +100,35 @@ graph TD
 
 - Receives results from the controller and presents them to the user.
 - Handles user selection and informs the controller which input was selected.
+- Can trigger `load more` either through infinite scroll or an explicit "View more" action.
 
 ### Store / UI State + Query Cache
 
 - Stores UI state such as the current query, loading state, error state, active suggestion index, and whether the popup is open.
 - Stores cached results for previous queries so the controller can reuse them before sending a new request.
 - Stores normalized result entities so repeated results across queries are not duplicated.
+- Stores pagination metadata such as `nextCursor`.
 
 ### Controller
 
 - The "brain" of the whole component, similar to the Controller in the Model View Controller (MVC) pattern. All the components in the system interact with this component.
 - Passes user input and results between components.
+- Debounces query changes before deciding whether to read from cache or call the network manager.
 - Fetches results from the server if the store does not already have cached results for a particular query.
+- Fetches the next page when the user scrolls near the end of suggestions or clicks "View more".
 - Conceptually, the controller sits at the center: it receives input from the field, checks the store for cached query results, falls back to the server on a miss, and writes responses back into the store so the results UI can render them.
 
-### Debounce + Request Manager
+### Network Manager
 
-- Debounces input changes before calling the search API.
+- Calls the search API and returns parsed data or a normalized error to the controller.
+- Handles basic request validation, response validation, timeout, retry, and API error handling.
 - Tracks the latest request id or abort controller so stale responses do not overwrite newer results.
+
+### Pagination
+
+- For autocomplete, keep the first page small so the popup stays easy to scan.
+- Use infinite scroll when the dropdown has enough height, or a "View more" action when we want an explicit user intent before loading more.
+- Prefer cursor-based pagination over offset-based pagination because search rankings can change while the user is typing or scrolling.
 
 ### Accessibility Helpers
 
@@ -165,15 +179,15 @@ classDiagram
 
 ### Store State
 
-| Field              | Type                                  | Description                                         |
-| ------------------ | ------------------------------------- | --------------------------------------------------- |
-| `query`            | `string`                              | Current search string                               |
-| `status`           | `idle \| loading \| stalled \| error` | Current fetch/rendering state                       |
-| `activeItemId`     | `number \| null`                      | Index/id of the currently highlighted suggestion    |
-| `selectedItemId`   | `string \| null`                      | Result selected by click, touch, or keyboard        |
-| `isOpen`           | `boolean`                             | Flag for whether the popup is open                  |
-| `currentRequestId` | `string \| null`                      | Latest request identifier used to ignore stale data |
-| `error`            | `string \| null`                      | Error message or code for the current query         |
+| Field              | Type                                                 | Description                                         |
+| ------------------ | ---------------------------------------------------- | --------------------------------------------------- |
+| `query`            | `string`                                             | Current search string                               |
+| `status`           | `idle \| loading \| loadingMore \| stalled \| error` | Current fetch/rendering state                       |
+| `activeItemId`     | `number \| null`                                     | Index/id of the currently highlighted suggestion    |
+| `selectedItemId`   | `string \| null`                                     | Result selected by click, touch, or keyboard        |
+| `isOpen`           | `boolean`                                            | Flag for whether the popup is open                  |
+| `currentRequestId` | `string \| null`                                     | Latest request identifier used to ignore stale data |
+| `error`            | `string \| null`                                     | Error message or code for the current query         |
 
 ### Query Cache Data Model
 
@@ -185,6 +199,13 @@ classDiagram
 | `fetchedAt`  | `number`                  | Timestamp for when it was fetched                |
 | `expiresAt`  | `number`                  | Timestamp for cache eviction                     |
 | `nextCursor` | `string \| null`          | Cursor if the full search result view loads more |
+
+### Pagination Choice
+
+- **Cursor pagination:** Better for autocomplete because it is stable when search ranking or indexed data changes between requests. Store the `nextCursor` per query and pass it when loading more.
+- **Offset pagination:** Simpler to reason about, but can return duplicate or missing results if the underlying result set changes while the user is interacting.
+
+For this component, cursor pagination is the better default.
 
 ### Result Entity
 
@@ -235,7 +256,16 @@ The server should provide an HTTP API that supports the following parameters:
 
 - `query`: The actual search query
 - `limit`: Number of results in one page
-- `pagination`: The page number (useful for scrolling down beyond the initial list of results)
+- `cursor`: Opaque cursor for loading the next page
+
+Example response:
+
+```json
+{
+  "results": [],
+  "nextCursor": "cursor_abc"
+}
+```
 
 ---
 
