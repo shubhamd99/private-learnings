@@ -76,7 +76,6 @@ flowchart LR
         end
 
         CONTROLLER[Controller + Debounce]
-        CACHE_CHECK{Cache hit and not expired?}
         STORE[Store / UI State + Query Cache]
         NETWORK[Network Manager]
     end
@@ -84,11 +83,10 @@ flowchart LR
     USER -->|type / focus / select / view more| UI
     INPUT -->|query changes| CONTROLLER
     RESULTS -->|selection / load more| CONTROLLER
-    CONTROLLER -->|read state| STORE
-    CONTROLLER --> CACHE_CHECK
-    STORE --> CACHE_CHECK
-    CACHE_CHECK -->|yes| STORE
-    CACHE_CHECK -->|no| NETWORK
+    CONTROLLER -->|check query cache| STORE
+    STORE -->|hit: cached results| CONTROLLER
+    STORE -->|miss / expired| CONTROLLER
+    CONTROLLER -->|miss: request suggestions| NETWORK
     STORE -->|render state| UI
     NETWORK -->|fetch suggestions with cursor| SERVER
     SERVER --> NETWORK
