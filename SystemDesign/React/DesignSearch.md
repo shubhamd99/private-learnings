@@ -126,6 +126,7 @@ flowchart LR
 - Calls the search API and returns parsed data or a normalized error to the controller.
 - Handles basic request validation, response validation, timeout, retry, and API error handling.
 - Tracks the latest request id or abort controller so stale responses do not overwrite newer results.
+- Good to have: use a small retry with backoff for transient failures, only if the query is still current.
 
 ### Pagination
 
@@ -142,58 +143,85 @@ flowchart LR
 
 ## D - Data Model
 
-At a glance, the store owns transient UI state (current input, active suggestion index, open/closed flag) and cached query history, keyed by the query string and referencing result entities.
+Use one Zustand/Redux store with three logical slices. The important part is normalization: query cache stores only `resultIds`, and the actual result data lives once in `resultsById`.
 
-```mermaid
-flowchart TD
-    STORE[Zustand / Redux Search Store]
+```typescript
+type SearchStatus = "idle" | "loading" | "loadingMore" | "stalled" | "error";
 
-    STORE --> UI_STATE[uiState]
-    UI_STATE --> QUERY[query]
-    UI_STATE --> STATUS[status]
-    UI_STATE --> OPEN[isOpen]
-    UI_STATE --> ACTIVE[activeItemId]
-    UI_STATE --> SELECTED[selectedItemId]
-    UI_STATE --> REQUEST[currentRequestId]
-    UI_STATE --> ERROR[error]
+type ResultId = string;
+type Query = string;
 
-    STORE --> QUERY_CACHE[queryCache]
-    QUERY_CACHE --> CACHE_KEY["query string key"]
-    CACHE_KEY --> RESULT_IDS[resultIds]
-    CACHE_KEY --> CACHE_STATUS[status]
-    CACHE_KEY --> FETCHED_AT[fetchedAt]
-    CACHE_KEY --> EXPIRES_AT[expiresAt]
-    CACHE_KEY --> NEXT_CURSOR[nextCursor]
+type SearchResult = {
+  id: ResultId;
+  type: "text" | "image" | "media" | string;
+  text: string;
+  subtitle?: string;
+  imageUrl?: string;
+  url?: string;
+  source: "recent" | "trending" | "remote";
+};
 
-    STORE --> RESULTS_BY_ID[resultsById]
-    RESULTS_BY_ID --> RESULT_ID["result id key"]
-    RESULT_ID --> RESULT_DATA["id, type, text, subtitle, imageUrl, url, source"]
+type SearchSessionStore = {
+  // Current autocomplete session state.
+  query: string;
+  status: SearchStatus;
+  isOpen: boolean;
 
-    RESULT_IDS -.-> RESULTS_BY_ID
+  // Highlighted suggestion while navigating the popup.
+  // Changes on hover or ArrowUp/ArrowDown. User has not selected it yet.
+  activeItemId: ResultId | null;
+
+  // Suggestion user actually picked by click, tap, or Enter.
+  // Can be cleared after navigation/search submit if not needed later.
+  selectedItemId: ResultId | null;
+
+  // Result ids currently rendered for this query.
+  // Array because order matters for ranked search suggestions.
+  activeResultIds: ResultId[];
+
+  // Cursor for the currently visible query.
+  // If present, show "View more" or trigger infinite scroll.
+  nextCursor: string | null;
+
+  // Used to ignore stale responses from older queries.
+  currentRequestId: string | null;
+  error: string | null;
+};
+
+type SearchQueryCacheStore = {
+  // Keyed by query string, e.g. "rea" or "react".
+  // Use empty string "" for initial suggestions before the user types.
+  // Object/map because query lookup should be O(1).
+  queryCache: Record<
+    Query,
+    {
+      resultIds: ResultId[]; // Array because result order matters.
+      fetchedAt: number;
+      expiresAt: number; // If Date.now() > expiresAt, evict or refetch.
+      nextCursor: string | null; // Cursor saved per query for loading more later.
+    }
+  >;
+};
+
+type SearchResultEntityStore = {
+  // Normalized result entities.
+  // Object/map because cache entries and UI state reference results by id.
+  // Cleanup removes an entity only when no non-expired query cache entry references it.
+  resultsById: Record<ResultId, SearchResult>;
+};
+
+type SearchStoreActions = {
+  // 1. Remove expired queryCache entries.
+  // 2. Build a Set of resultIds still used by non-expired cache entries.
+  // 3. Remove any resultsById entry not present in that Set.
+  evictExpiredCacheEntries: () => void;
+};
+
+type SearchStore = SearchSessionStore &
+  SearchQueryCacheStore &
+  SearchResultEntityStore &
+  SearchStoreActions;
 ```
-
-### Store State
-
-| Field              | Type                                                 | Description                                         |
-| ------------------ | ---------------------------------------------------- | --------------------------------------------------- |
-| `query`            | `string`                                             | Current search string                               |
-| `status`           | `idle \| loading \| loadingMore \| stalled \| error` | Current fetch/rendering state                       |
-| `activeItemId`     | `number \| null`                                     | Index/id of the currently highlighted suggestion    |
-| `selectedItemId`   | `string \| null`                                     | Result selected by click, touch, or keyboard        |
-| `isOpen`           | `boolean`                                            | Flag for whether the popup is open                  |
-| `currentRequestId` | `string \| null`                                     | Latest request identifier used to ignore stale data |
-| `error`            | `string \| null`                                     | Error message or code for the current query         |
-
-### Query Cache Data Model
-
-| Field        | Type                      | Description                                      |
-| ------------ | ------------------------- | ------------------------------------------------ |
-| `query`      | `string`                  | The search query term                            |
-| `resultIds`  | `string[]`                | References to normalized result items            |
-| `status`     | `fresh \| stale \| error` | Cache entry status                               |
-| `fetchedAt`  | `number`                  | Timestamp for when it was fetched                |
-| `expiresAt`  | `number`                  | Timestamp for cache eviction                     |
-| `nextCursor` | `string \| null`          | Cursor if the full search result view loads more |
 
 ### Pagination Choice
 
@@ -202,65 +230,153 @@ flowchart TD
 
 For this component, cursor pagination is the better default.
 
-### Result Entity
-
-| Field      | Type     | Description                                         |
-| ---------- | -------- | --------------------------------------------------- |
-| `id`       | `string` | Unique identifier for the result                    |
-| `type`     | `string` | Type of result (e.g., text, organization, musician) |
-| `text`     | `string` | Main text of the result                             |
-| `subtitle` | `string` | Secondary text or description                       |
-| `imageUrl` | `string` | Optional image for rich result rows                 |
-| `url`      | `string` | Destination for selected result or full search page |
-| `source`   | `string` | Where it came from: recent, trending, or remote API |
-
 ---
 
 ## I - Interface Definition (API)
 
-Since this is a front end system design question, we will focus on the API of the component and only briefly touch on the search API that the server should provide.
+The component API should support controlled state, custom rendering, event callbacks, and a replaceable backend fetcher.
 
-### Client Basic API
+### API Surface Summary
 
-These are the core APIs that affect the functionality of the component.
+- **Basic API:** `limit`, backend endpoint/fetcher, event callbacks, CSS class names, and render callbacks.
+- **Advanced API:** minimum query length, debounce duration, timeout, initial results, cache source, merge strategy, and cache TTL.
 
-- **Number of results:** The number of results to show in the list of results.
-- **API URL:** The URL to hit when a query is made. For an autocomplete use case, queries are made as the user types.
-- **Event listeners:** `'input'`, `'focus'`, `'blur'`, `'change'`, and `'select'` are some of the common events that developers might want to respond to (possibly to log user interactions), so adding hooks for these events would be helpful.
-- **Customized rendering:** There are a few ways to allow developers to customize the rendering of the various parts of their UI for their use cases:
-  - **Theming options object:** This approach is the easiest to use but the least flexible/customizable. The component can accept an object of key/value pairs (e.g. `{ textSize: '12px', textColor: 'red' }`) and use it when rendering.
-  - **Classnames:** Allow developers to specify their own CSS class names that the component will add to the various UI sub-components.
-  - **Render function/callback:** This is an inversion of control technique commonly used in React where the rendering is completely left to the developer. The component invokes a developer-provided function with some data, and the developer can customize the logic/code to render the UI based on that data. This is the most flexible approach but requires the most effort from the developer.
+### Component API
 
-### Client Advanced API
+```typescript
+type AutocompleteProps<TItem> = {
+  // Controlled/uncontrolled input support.
+  value?: string;
+  defaultValue?: string;
+  onInputChange?: (query: string) => void;
 
-These APIs affect the user experience and performance of the component and should be covered if there's enough time.
+  // Search behavior.
+  minQueryLength?: number; // Default: 2 or 3.
+  debounceMs?: number; // Default: 300ms.
+  limit?: number; // Suggestions per page.
+  cacheTtlMs?: number; // Time until query cache expires.
+  timeoutMs?: number; // Time before request is treated as failed.
+  allowCustomQuery?: boolean; // Allows submit without selecting a suggestion.
+  initialResults?: TItem[]; // Recent/trending results before typing.
+  resultsSource?: "networkOnly" | "networkAndCache" | "cacheOnly";
+  mergeResults?: (cached: TItem[], remote: TItem[]) => TItem[];
 
-- **Minimum query length:** There will likely be too many irrelevant results if the user query is too short, as it is not specific enough. We might only want to trigger the search when a minimum number of characters have been typed in, possibly 3 or more.
-- **Debounce duration:** Triggering a back end search API for every keystroke can be quite wasteful, especially when the queries for the first few characters are likely to not be meaningful. Debouncing is a technique that limits the number of times a function gets called. We could debounce the API calls so that the server does not get hit too often. With a debounce duration of `300ms`, the back end search API will only be called after there has been no user input for 300ms.
-- **API timeout duration:** How long we should wait for a response before determining that the search has timed out so we can display an error.
-- **Cache-related:**
-  - **Initial results:** Showing results when input is first focused.
-  - **Results source:** network only / network and cache / cache only.
-  - **Function to merge results from server and cache.**
-  - **Cache duration.**
+  // Backend endpoint or custom fetcher. Fetcher is more flexible for apps.
+  apiUrl?: string;
+  fetchSuggestions: (params: {
+    query: string;
+    limit: number;
+    cursor?: string | null;
+    signal?: AbortSignal;
+  }) => Promise<SuggestionResponse<TItem>>;
 
-### Server API
+  // Styling customization through CSS class slots.
+  className?: string;
+  classNames?: {
+    root?: string;
+    input?: string;
+    popup?: string;
+    list?: string;
+    item?: string;
+    activeItem?: string;
+    empty?: string;
+    loading?: string;
+    error?: string;
+  };
 
-The server should provide an HTTP API that supports the following parameters:
+  // Render customization. More flexible than CSS, but more work for users.
+  renderInput?: (props: InputRenderProps) => React.ReactNode;
+  renderItem?: (item: TItem, state: ItemRenderState) => React.ReactNode;
+  renderEmpty?: (query: string) => React.ReactNode;
+  renderLoading?: () => React.ReactNode;
+  renderError?: (error: Error) => React.ReactNode;
 
-- `query`: The actual search query
-- `limit`: Number of results in one page
-- `cursor`: Opaque cursor for loading the next page
+  // Events for product analytics or host app behavior.
+  onSelect?: (item: TItem) => void;
+  onSubmit?: (query: string) => void;
+  onOpenChange?: (isOpen: boolean) => void;
+  onHighlightChange?: (item: TItem | null) => void;
+  onError?: (error: Error) => void;
+};
 
-Example response:
+type SuggestionResponse<TItem> = {
+  results: TItem[];
+  nextCursor: string | null;
+};
+
+type InputRenderProps = {
+  value: string;
+  isOpen: boolean;
+  status: SearchStatus;
+  inputProps: React.InputHTMLAttributes<HTMLInputElement>;
+};
+
+type ItemRenderState = {
+  isActive: boolean;
+  isSelected: boolean;
+  index: number;
+};
+```
+
+### Backend API
+
+```http
+GET /api/search/suggestions?query=react&limit=10&cursor=cursor_abc
+```
+
+#### Request Parameters
+
+| Param    | Type     | Required | Description                                     |
+| -------- | -------- | -------- | ----------------------------------------------- |
+| `query`  | `string` | Yes      | User typed search query                         |
+| `limit`  | `number` | No       | Number of suggestions to return                 |
+| `cursor` | `string` | No       | Opaque cursor returned by the previous response |
+
+`query` can be empty only for initial suggestions such as trending or popular searches.
+
+#### Success Response
 
 ```json
 {
-  "results": [],
-  "nextCursor": "cursor_abc"
+  "results": [
+    {
+      "id": "result_123",
+      "type": "media",
+      "text": "React Router",
+      "subtitle": "Routing library for React",
+      "imageUrl": "https://cdn.example.com/react-router.png",
+      "url": "/search/react-router",
+      "source": "remote",
+      "matchedRanges": [{ "field": "text", "start": 0, "length": 5 }]
+    }
+  ],
+  "nextCursor": "cursor_next_page"
 }
 ```
+
+- `nextCursor` should be `null` when there are no more results.
+- Use cursor pagination because autocomplete ranking can change between requests.
+- Backend should return stable ids so the frontend can normalize results into `resultsById`.
+- `matchedRanges` is optional, but useful when the server wants to control text highlighting.
+
+#### Error Response
+
+```json
+{
+  "error": {
+    "code": "RATE_LIMITED",
+    "message": "Too many search requests. Please retry later.",
+    "retryAfterMs": 1000
+  }
+}
+```
+
+Common status codes:
+
+- `400`: Invalid query, limit, or cursor.
+- `429`: Rate limited.
+- `500`: Server error.
+- `503`: Search service unavailable.
 
 ---
 
@@ -274,11 +390,11 @@ Autocomplete fires a request on nearly every keystroke, so the network layer has
 
 #### Handling concurrent requests/race conditions
 
-Never trust response arrival order to decide what to show. Responses for older keystrokes can easily overtake newer ones on a flaky network. Key responses by query string instead of canceling older requests. Aborting in-flight requests wastes work the server has already done and throws away results that can populate the cache for free. Storing each response under its query string lets the UI pick the right result for the current input and instantly serve backspace or fat-finger retypes from memory without a new round trip.
+Never trust response arrival order to decide what to show. Responses for older keystrokes can easily overtake newer ones on a flaky network. Track a `currentRequestId` or use `AbortController`, and only write the response if it still belongs to the latest query. Cache entries are still keyed by query string, so backspace or repeated queries can be served from memory.
 
 #### Failed requests and retries
 
-Server requests can sometimes fail. The component can automatically retry firing the query using an exponential backoff strategy if concerned about overloading the server.
+Autocomplete should not aggressively retry every failed keystroke. Use timeouts, show an error state, and optionally do one small backoff retry for transient failures only if the query is still current. Respect `429` and `retryAfterMs` when the backend sends it.
 
 #### Offline usage
 
@@ -339,11 +455,18 @@ _Pros:_ Fast lookup and non-duplicated data. Best for long-lived applications.
 
 - **Short-lived websites (e.g. Google search):** Option 1 is fine as the memory usage is cleared upon navigation.
 - **Long-lived websites (e.g. Facebook SPA):** Option 3 is better to prevent memory bloat over time.
+- **Our choice:** Option 3. `queryCache` stores ordered `resultIds`, while `resultsById` stores each result entity once. This keeps lookup fast, avoids duplicate result objects, and lets each query keep its own `nextCursor`.
 
 #### Caching strategy
 
-- **Eviction:** Google can cache for hours, while Facebook might cache for half an hour. Stock tickers might not cache at all.
-- **Initial Results:** E.g., showing trending searches on focus to save typing and reduce server costs.
+- **Cache location:** In-memory frontend store, not a separate backend caching layer.
+- **Cache key:** Normalized query string.
+- **Initial suggestions key:** Store recent, popular, or trending suggestions under the empty string key `""`.
+- **Cache value:** Ordered `resultIds`, `fetchedAt`, `expiresAt`, and `nextCursor`.
+- **Eviction:** Use TTL via `expiresAt`. When a query cache entry expires, remove it and then remove any `resultsById` entities no longer referenced by non-expired cache entries.
+- **Initial results:** Show recent, popular, or trending searches on focus before typing.
+- **Results source:** Default to `networkAndCache`; support `networkOnly` or `cacheOnly` through API configuration if needed.
+- **Backend caching good to have:** Cache popular query responses in Redis or an edge cache using keys like `suggestions:{normalizedQuery}:{limit}:{cursor}` with a short TTL. This reduces load on the search service for hot prefixes such as `fa`, `face`, or `react`.
 
 ### 3. Performance
 
