@@ -258,7 +258,6 @@ type AutocompleteProps<TItem> = {
   timeoutMs?: number; // Time before request is treated as failed.
   allowCustomQuery?: boolean; // Allows submit without selecting a suggestion.
   initialResults?: TItem[]; // Recent/trending results before typing.
-  resultsSource?: "networkOnly" | "networkAndCache" | "cacheOnly";
   mergeResults?: (cached: TItem[], remote: TItem[]) => TItem[];
 
   // Backend endpoint or custom fetcher. Fetcher is more flexible for apps.
@@ -465,8 +464,9 @@ _Pros:_ Fast lookup and non-duplicated data. Best for long-lived applications.
 - **Cache value:** Ordered `resultIds`, `fetchedAt`, `expiresAt`, and `nextCursor`.
 - **Eviction:** Use TTL via `expiresAt`. When a query cache entry expires, remove it and then remove any `resultsById` entities no longer referenced by non-expired cache entries.
 - **Initial results:** Show recent, popular, or trending searches on focus before typing.
-- **Results source:** Default to `networkAndCache`; support `networkOnly` or `cacheOnly` through API configuration if needed.
+- **Read path:** If cache hit and not expired, serve from store. If cache miss or expired, call network. If offline, serve cache if available or show offline state.
 - **Backend caching good to have:** Cache popular query responses in Redis or an edge cache using keys like `suggestions:{normalizedQuery}:{limit}:{cursor}` with a short TTL. This reduces load on the search service for hot prefixes such as `fa`, `face`, or `react`.
+- **Browser HTTP cache:** Optional, not core. Useful only for non-personalized public suggestions. Backend can send `Cache-Control: private, max-age=60` for per-user responses, or `Cache-Control: public, max-age=60, s-maxage=300` for shared public suggestions.
 
 ### 3. Performance
 
