@@ -63,22 +63,30 @@ These are questions you should ask the interviewer to refine the scope before lo
 
 ```mermaid
 graph TD
-    USER[User] --> AC[Autocomplete Component]
+    USER[User] --> INPUT
 
-    subgraph AC[Autocomplete Component]
+    subgraph AUTOCOMPLETE[Autocomplete Component]
         INPUT[Input UI]
         RESULTS[Results UI]
+        CONTROLLER[Controller]
+        STORE[Store / UI State + Query Cache]
+        REQUEST[Debounce + Request Manager]
+        A11Y[Accessibility Helpers]
     end
 
     INPUT --> CONTROLLER[Controller]
     RESULTS --> CONTROLLER
-    CONTROLLER --> STORE[Store / UI State]
-    CONTROLLER --> DEBOUNCE[Debounce + Request Manager]
-    DEBOUNCE --> CACHE[Cache]
-    CACHE -->|hit| CONTROLLER
-    CACHE -->|miss| SERVER[Search API Server]
-    SERVER --> CACHE
-    CONTROLLER --> RESULTS
+    CONTROLLER --> STORE[Store / UI State + Query Cache]
+    CONTROLLER --> REQUEST
+    REQUEST --> SERVER[Search API Server]
+    SERVER --> REQUEST
+    REQUEST --> CONTROLLER
+    STORE --> RESULTS
+    A11Y --> INPUT
+    A11Y --> RESULTS
+    CONFIG[Config / Render Props / Event Callbacks] --> INPUT
+    CONFIG --> RESULTS
+    CONFIG --> CONTROLLER
 ```
 
 ### Input field UI
@@ -90,39 +98,93 @@ graph TD
 - Receives results from the controller and presents them to the user.
 - Handles user selection and informs the controller which input was selected.
 
-### Cache
+### Store / UI State + Query Cache
 
-- Stores the results for previous queries so that the controller can check the cache before sending a request to the server.
+- Stores UI state such as the current query, loading state, error state, active suggestion index, and whether the popup is open.
+- Stores cached results for previous queries so the controller can reuse them before sending a new request.
+- Stores normalized result entities so repeated results across queries are not duplicated.
 
 ### Controller
 
 - The "brain" of the whole component, similar to the Controller in the Model View Controller (MVC) pattern. All the components in the system interact with this component.
 - Passes user input and results between components.
-- Fetches results from the server if the cache is empty for a particular query.
-- Conceptually, the controller sits at the center: it receives input from the field, consults the cache, falls back to the server on a miss, and pushes results into the popup while also writing responses back into the cache for future keystrokes.
+- Fetches results from the server if the store does not already have cached results for a particular query.
+- Conceptually, the controller sits at the center: it receives input from the field, checks the store for cached query results, falls back to the server on a miss, and writes responses back into the store so the results UI can render them.
+
+### Debounce + Request Manager
+
+- Debounces input changes before calling the search API.
+- Tracks the latest request id or abort controller so stale responses do not overwrite newer results.
+
+### Accessibility Helpers
+
+- Adds proper ARIA tags for the input, popup, and active option.
+- Supports keyboard navigation across the input and results popup.
 
 ---
 
 ## D - Data Model
 
-At a glance, the controller owns transient UI state (current input, active suggestion index, open/closed flag) while the cache owns persistent query history, keyed by the query string and referencing result entities.
+At a glance, the store owns transient UI state (current input, active suggestion index, open/closed flag) and cached query history, keyed by the query string and referencing result entities.
 
-### Controller State
+```mermaid
+classDiagram
+    class StoreState {
+        string query
+        string status
+        boolean isOpen
+        number activeItemId
+        string selectedItemId
+        string currentRequestId
+        string error
+    }
 
-| Field         | Type      | Description                                     |
-| ------------- | --------- | ----------------------------------------------- |
-| `input`       | `string`  | Current search string                           |
-| `activeIndex` | `number`  | Index of currently active suggestion            |
-| `isOpen`      | `boolean` | Flag for whether the popup is open              |
-| `isLoading`   | `boolean` | Flag indicating if a network request is pending |
+    class QueryCacheEntry {
+        string query
+        string resultIds
+        string status
+        number fetchedAt
+        number expiresAt
+        string nextCursor
+    }
 
-### Cache Data Model
+    class ResultEntity {
+        string id
+        string type
+        string text
+        string subtitle
+        string imageUrl
+        string url
+        string source
+    }
 
-| Field       | Type       | Description                                      |
-| ----------- | ---------- | ------------------------------------------------ |
-| `query`     | `string`   | The search query term                            |
-| `resultIds` | `string[]` | References to the result items                   |
-| `fetchedAt` | `number`   | Timestamp for when it was fetched (for eviction) |
+    StoreState "1" --> "*" QueryCacheEntry : queryCache
+    StoreState "1" --> "*" ResultEntity : resultsById
+    QueryCacheEntry "*" --> "*" ResultEntity : resultIds
+```
+
+### Store State
+
+| Field              | Type                                  | Description                                         |
+| ------------------ | ------------------------------------- | --------------------------------------------------- |
+| `query`            | `string`                              | Current search string                               |
+| `status`           | `idle \| loading \| stalled \| error` | Current fetch/rendering state                       |
+| `activeItemId`     | `number \| null`                      | Index/id of the currently highlighted suggestion    |
+| `selectedItemId`   | `string \| null`                      | Result selected by click, touch, or keyboard        |
+| `isOpen`           | `boolean`                             | Flag for whether the popup is open                  |
+| `currentRequestId` | `string \| null`                      | Latest request identifier used to ignore stale data |
+| `error`            | `string \| null`                      | Error message or code for the current query         |
+
+### Query Cache Data Model
+
+| Field        | Type                      | Description                                      |
+| ------------ | ------------------------- | ------------------------------------------------ |
+| `query`      | `string`                  | The search query term                            |
+| `resultIds`  | `string[]`                | References to normalized result items            |
+| `status`     | `fresh \| stale \| error` | Cache entry status                               |
+| `fetchedAt`  | `number`                  | Timestamp for when it was fetched                |
+| `expiresAt`  | `number`                  | Timestamp for cache eviction                     |
+| `nextCursor` | `string \| null`          | Cursor if the full search result view loads more |
 
 ### Result Entity
 
@@ -132,6 +194,9 @@ At a glance, the controller owns transient UI state (current input, active sugge
 | `type`     | `string` | Type of result (e.g., text, organization, musician) |
 | `text`     | `string` | Main text of the result                             |
 | `subtitle` | `string` | Secondary text or description                       |
+| `imageUrl` | `string` | Optional image for rich result rows                 |
+| `url`      | `string` | Destination for selected result or full search page |
+| `source`   | `string` | Where it came from: recent, trending, or remote API |
 
 ---
 
