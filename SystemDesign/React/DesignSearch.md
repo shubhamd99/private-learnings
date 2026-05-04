@@ -142,39 +142,31 @@ flowchart LR
 At a glance, the store owns transient UI state (current input, active suggestion index, open/closed flag) and cached query history, keyed by the query string and referencing result entities.
 
 ```mermaid
-classDiagram
-    class StoreState {
-        string query
-        string status
-        boolean isOpen
-        number activeItemId
-        string selectedItemId
-        string currentRequestId
-        string error
-    }
+flowchart TD
+    STORE[Zustand / Redux Search Store]
 
-    class QueryCacheEntry {
-        string query
-        string resultIds
-        string status
-        number fetchedAt
-        number expiresAt
-        string nextCursor
-    }
+    STORE --> UI_STATE[uiState]
+    UI_STATE --> QUERY[query]
+    UI_STATE --> STATUS[status]
+    UI_STATE --> OPEN[isOpen]
+    UI_STATE --> ACTIVE[activeItemId]
+    UI_STATE --> SELECTED[selectedItemId]
+    UI_STATE --> REQUEST[currentRequestId]
+    UI_STATE --> ERROR[error]
 
-    class ResultEntity {
-        string id
-        string type
-        string text
-        string subtitle
-        string imageUrl
-        string url
-        string source
-    }
+    STORE --> QUERY_CACHE[queryCache]
+    QUERY_CACHE --> CACHE_KEY["query string key"]
+    CACHE_KEY --> RESULT_IDS[resultIds]
+    CACHE_KEY --> CACHE_STATUS[status]
+    CACHE_KEY --> FETCHED_AT[fetchedAt]
+    CACHE_KEY --> EXPIRES_AT[expiresAt]
+    CACHE_KEY --> NEXT_CURSOR[nextCursor]
 
-    StoreState "1" --> "*" QueryCacheEntry : queryCache
-    StoreState "1" --> "*" ResultEntity : resultsById
-    QueryCacheEntry "*" --> "*" ResultEntity : resultIds
+    STORE --> RESULTS_BY_ID[resultsById]
+    RESULTS_BY_ID --> RESULT_ID["result id key"]
+    RESULT_ID --> RESULT_DATA["id, type, text, subtitle, imageUrl, url, source"]
+
+    RESULT_IDS -.-> RESULTS_BY_ID
 ```
 
 ### Store State
