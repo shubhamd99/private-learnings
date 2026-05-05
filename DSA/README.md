@@ -113,6 +113,7 @@
 | 2   | Linked List Cycle II      | 142   | Medium     |
 | 3   | Find the Duplicate Number | 287   | Medium     |
 | 4   | Middle of Linked List     | 876   | Easy       |
+| 5   | Palindrome Linked List    | 234   | Easy       |
 
 ### DAY 4 — Sliding Window Fixed
 
@@ -528,7 +529,7 @@
 | -------------- | ----- |
 | Total Days     | 36    |
 | Total Patterns | 44    |
-| Total Problems | 187   |
-| **Easy**       | 40    |
+| Total Problems | 188   |
+| **Easy**       | 41    |
 | **Medium**     | 110   |
 | **Hard**       | 37    |
