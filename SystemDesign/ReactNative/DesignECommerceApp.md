@@ -150,17 +150,53 @@ flowchart LR
 
 ### Home Widget Engine
 
+A home widget engine is a small server-driven UI renderer for the home screen. It is not just a map from widget type to component. The backend decides the screen structure; the client validates the schema, resolves widget components, loads widget data, wires actions, records analytics, and renders safe fallbacks.
+
 - Reads `/home/manifest` and renders widgets in backend-defined order.
+- Validates widget schema version and ignores unsupported widgets safely.
 - Fetches above-fold widgets immediately and below-fold widgets when they enter viewport.
+- Applies layout rules such as placement, spacing, carousel/grid style, and visibility.
+- Handles widget actions such as navigate, open PDP, add to cart, open search, or track impression.
+- Emits analytics events for widget impression, item impression, click, and conversion.
 - Supports heterogeneous widgets: hero banners, category strips, Buy Again, product carousel, flash-sale row, sponsored row, recently viewed, and order history strip.
-- Product widgets store only product IDs and reuse the global `productsById` map.
+- Widget APIs can return product/deal summaries, which are merged into global `productsById` and `dealsById`.
+- Widget UI stores only ordered item IDs, so repeated products across widgets are deduped automatically.
+
+```typescript
+type HomeWidgetEngine = {
+  validateManifest: (manifest: unknown) => HomeStore["manifest"];
+  renderWidget: (widget: HomeStore["manifest"][number]) => React.ReactNode;
+  fetchWidgetData: (widget: HomeStore["manifest"][number]) => Promise<void>;
+  executeAction: (action: WidgetAction) => void;
+  trackWidgetEvent: (event: {
+    type: "widget_impression" | "item_impression" | "click" | "conversion";
+    widgetId: string;
+    itemId?: string;
+  }) => void;
+};
+
+const widgetRegistry = {
+  hero_banner: HeroBannerWidget,
+  category_strip: CategoryStripWidget,
+  product_carousel: ProductCarouselWidget,
+  flash_sale: FlashSaleWidget,
+  buy_again: BuyAgainWidget,
+};
+```
 
 ### Live Commerce Manager
+
+In code, this is a hook/service that opens and closes SSE/WebSocket connections and dispatches incoming events into Zustand.
 
 - Owns SSE/WebSocket subscriptions for flash sales, live deals, banners, and auctions.
 - Updates `dealsById` and `auctionsById` without refetching the full product entity.
 - Uses SSE for one-way deal updates and WebSocket for bidding.
 - Falls back to short polling when the live connection fails.
+
+```typescript
+useLiveDealSubscription(dealId); // Opens SSE, patches dealsById.
+useAuctionSocket(auctionId); // Opens WebSocket, patches auctionsById.
+```
 
 ### Network Manager
 
@@ -198,6 +234,12 @@ type ProductId = string;
 type VariantId = string;
 type QueryKey = string;
 type Cursor = string | null;
+
+type WidgetAction =
+  | { type: "navigate"; screen: string; params?: Record<string, string> }
+  | { type: "open_product"; productId: ProductId }
+  | { type: "open_search"; query?: string }
+  | { type: "add_to_cart"; productId: ProductId; variantId?: VariantId; qty: number };
 
 type Product = {
   id: ProductId;
@@ -240,6 +282,7 @@ type HomeStore = {
   // Server controls widget order and type.
   manifest: {
     widgetId: string;
+    schemaVersion: number;
     type:
       | "hero_banner"
       | "category_strip"
@@ -251,10 +294,22 @@ type HomeStore = {
       | "sponsored_banner";
     priority: "above_fold" | "below_fold";
     dataUrl: string;
+    layout: {
+      presentation: "full_width" | "carousel" | "grid" | "strip";
+      columns?: number;
+      itemAspectRatio?: number;
+    };
+    action?: WidgetAction;
+    tracking: {
+      impressionId: string;
+      experimentId?: string;
+      placement: string;
+    };
     liveUpdates?: boolean;
   }[];
 
-  // Per-widget data. Product widgets store productIds only.
+  // Per-widget data stores ordered item IDs only.
+  // Product/deal objects from widget APIs are normalized into productsById/dealsById.
   widgetDataById: Record<
     string,
     {
@@ -383,6 +438,11 @@ type CatalogActions = {
   }) => Promise<void>;
 
   loadNextPage: (queryKey: QueryKey) => Promise<void>;
+
+  // Update only one product inside productsById without refetching the full list.
+  // Used when stock, price, wishlist marker, rating, or deal badge changes.
+  // Because lists store only productIds, patching one product re-renders only that card.
+  // Example: patchProduct("prod_1", { inStock: false, price: 99 });
   patchProduct: (productId: ProductId, patch: Partial<Product>) => void;
 };
 
@@ -464,27 +524,53 @@ WS /auctions/:auctionId/stream
   "widgets": [
     {
       "widgetId": "w_hero_1",
+      "schemaVersion": 1,
       "type": "hero_banner",
       "priority": "above_fold",
       "dataUrl": "/home/widgets/w_hero_1",
+      "layout": { "presentation": "full_width", "itemAspectRatio": 2.4 },
+      "action": {
+        "type": "navigate",
+        "screen": "ProductListing",
+        "params": { "categoryId": "deals" }
+      },
+      "tracking": {
+        "impressionId": "imp_hero_1",
+        "experimentId": "exp_home_v3",
+        "placement": "home_top"
+      },
       "liveUpdates": true
     },
     {
       "widgetId": "w_flash_sale",
+      "schemaVersion": 1,
       "type": "flash_sale",
       "priority": "above_fold",
       "dataUrl": "/home/widgets/w_flash_sale",
+      "layout": { "presentation": "carousel", "itemAspectRatio": 0.75 },
+      "tracking": {
+        "impressionId": "imp_flash_1",
+        "placement": "home_above_fold"
+      },
       "liveUpdates": true
     },
     {
       "widgetId": "w_buy_again",
+      "schemaVersion": 1,
       "type": "buy_again",
       "priority": "below_fold",
-      "dataUrl": "/home/widgets/w_buy_again"
+      "dataUrl": "/home/widgets/w_buy_again",
+      "layout": { "presentation": "carousel" },
+      "tracking": {
+        "impressionId": "imp_buy_again_1",
+        "placement": "home_below_fold"
+      }
     }
   ]
 }
 ```
+
+Manifest fields are UI instructions, not arbitrary code. The app only executes known `action.type` values and only renders widget types present in the local registry.
 
 ### Widget Data Response
 
@@ -493,8 +579,29 @@ WS /auctions/:auctionId/stream
   "widgetId": "w_flash_sale",
   "items": [
     {
-      "productId": "prod_123",
-      "dealId": "deal_123"
+      "product": {
+        "id": "prod_123",
+        "title": "Nike Air Max 270",
+        "brand": "Nike",
+        "categoryId": "shoes",
+        "price": 129.99,
+        "image": {
+          "url": "https://cdn.example.com/nike.jpg",
+          "width": 800,
+          "height": 800
+        },
+        "inStock": true
+      },
+      "deal": {
+        "dealId": "deal_123",
+        "productId": "prod_123",
+        "dealPrice": 99.99,
+        "originalPrice": 129.99,
+        "startsAt": "2026-05-05T14:00:00Z",
+        "endsAt": "2026-05-05T15:30:00Z",
+        "claimedPct": 82,
+        "stockStatus": "low_stock"
+      }
     }
   ],
   "nextCursor": "cursor_next",
@@ -502,7 +609,13 @@ WS /auctions/:auctionId/stream
 }
 ```
 
-Product widgets return product IDs and optional metadata like `dealId`; full product data is merged into `productsById`.
+Each widget fetches its own data, but product/deal objects are still normalized into shared stores:
+
+- `item.product` merges into `productsById[product.id]`.
+- `item.deal` merges into `dealsById[deal.dealId]`.
+- `widgetDataById[widgetId].itemIds` stores ordered product IDs only.
+
+This removes duplicates automatically when multiple widgets return the same product.
 
 ### Product Listing Response
 
@@ -555,6 +668,12 @@ Important: cart response overwrites local optimistic state. Server wins for pric
 
 SSE is enough for one-way live deal updates because the client mostly listens for state changes.
 
+Live deal events are patch updates, not the initial source of truth. Full product/deal details are fetched earlier by the widget API or deal detail API:
+
+- Home flash-sale widget calls `GET /home/widgets/:widgetId` and receives product + deal summaries.
+- Deal detail screen calls `GET /deals/:dealId` if the deal was opened directly or missing from store.
+- SSE event only patches fields that change frequently, such as `dealPrice`, `claimedPct`, `stockStatus`, and `endsAt`.
+
 ```json
 {
   "event": "deal_updated",
@@ -570,6 +689,13 @@ SSE is enough for one-way live deal updates because the client mostly listens fo
 ### Auction Event
 
 WebSocket is better for auctions because bid placement and bid state are interactive and latency-sensitive.
+
+Auction events are also patch updates. Full auction detail is fetched before opening the socket:
+
+- Product detail screen calls `GET /auctions/:auctionId` when the user opens an auction product.
+- The response includes full auction state, product summary, current bid, min next bid, end time, and user bid status.
+- After initial hydration, WebSocket events patch only live fields like `currentBid`, `minNextBid`, `userBidStatus`, and `endsAt`.
+- If the user opens an auction through a deep link and the store is empty, the screen fetches `GET /auctions/:auctionId` first, then subscribes to `WS /auctions/:auctionId/stream`.
 
 ```json
 {
@@ -641,13 +767,16 @@ Offset pagination is acceptable for small, stable personal lists such as order h
 ### 7. Server-Driven Home
 
 - Amazon/Flipkart-style home pages are feeds of heterogeneous widgets, not a single static page.
-- `/home/manifest` returns ordered widget descriptors: type, priority, data URL, display config, and live-update flag.
+- `/home/manifest` returns ordered widget descriptors: schema version, type, priority, data URL, layout, action, tracking metadata, and live-update flag.
 - Above-fold widgets fetch immediately so first screen appears fast.
 - Below-fold widgets fetch on viewport entry to avoid blocking first render.
-- Product widgets store product IDs and reuse `productsById`.
+- Widget APIs return product/deal summaries; client normalizes them into `productsById` and `dealsById`.
+- Widget UI stores ordered IDs, so duplicate products across widgets are removed automatically.
 - Personalization widgets include Buy Again, recommended for you, recently viewed, trending, best-sellers, deals, sponsored rows, and category strips.
 - Live banners and flash-sale widgets can use SSE with polling fallback.
 - Unknown widget types should render a safe fallback instead of crashing the home screen.
+- Unsupported schema versions should be ignored or mapped to a fallback widget.
+- Widget actions are allowlisted client actions, not server-sent JavaScript.
 
 ### 8. Flash Sale / Live Deals
 
