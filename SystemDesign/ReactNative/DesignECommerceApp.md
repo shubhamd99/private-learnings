@@ -563,7 +563,6 @@ GET /addresses
 POST /addresses
 GET /shipping-methods?addressId=
 POST /orders                         # with Idempotency-Key header
-GET /orders/:orderId/status
 GET /orders
 GET /orders/:orderId
 
@@ -734,7 +733,7 @@ Cart → validate cart → select address → fetch shipping methods
 → backend returns orderId + paymentUrl/paymentSession
 → app opens payment SDK/link
 → provider webhook updates backend order status
-→ app polls GET /orders/:orderId/status on return/foreground
+→ app calls GET /orders/:orderId on return/foreground
 ```
 
 ### Create Order Response
@@ -752,14 +751,15 @@ Cart → validate cart → select address → fetch shipping methods
 
 Persist `orderId` and `paymentUrl` before opening the payment SDK/app. On return or app foreground, poll order status and move the user to confirmation, retry, or failure state. Backend should listen to provider webhooks and map payment result to order status because the app can be killed before receiving payment callback.
 
-### Order Status Response
+### Order Detail / Recovery Response
 
 ```json
 {
   "orderId": "ord_123",
   "status": "PAYMENT_FAILED",
   "failureReason": "PAYMENT_DECLINED",
-  "retryPaymentUrl": "https://pay.example.com/session/ord_123_retry"
+  "retryPaymentUrl": "https://pay.example.com/session/ord_123_retry",
+  "...": "other order details like items, address, totals, tracking"
 }
 ```
 
@@ -893,7 +893,7 @@ Offset pagination is acceptable for small, stable personal lists such as order h
 - Backend creates the payment session/link and returns `orderId` and `paymentUrl`.
 - Persist `pendingOrderId` and `paymentUrl` in MMKV before opening payment SDK/browser.
 - Backend receives provider webhooks and updates order status; client callback is only for UX.
-- On app foreground/return, call `GET /orders/:orderId/status` to recover.
+- On app foreground/return, call `GET /orders/:orderId` to recover.
 - On payment failure, keep the order in `PAYMENT_FAILED` and show retry payment. Do not create a new order unless backend explicitly expires the old one.
 - On order creation failure, show error and keep cart intact because server has not created a successful order.
 - If cart changed during checkout, rerun `POST /cart/validate` before payment.
