@@ -239,7 +239,12 @@ type WidgetAction =
   | { type: "navigate"; screen: string; params?: Record<string, string> }
   | { type: "open_product"; productId: ProductId }
   | { type: "open_search"; query?: string }
-  | { type: "add_to_cart"; productId: ProductId; variantId?: VariantId; qty: number };
+  | {
+      type: "add_to_cart";
+      productId: ProductId;
+      variantId?: VariantId;
+      qty: number;
+    };
 
 type Product = {
   id: ProductId;
@@ -252,9 +257,11 @@ type Product = {
   rating?: number;
   reviewCount?: number;
   image: {
+    imageId: string;
     url: string;
     width: number; // Used to calculate aspectRatio before image loads.
     height: number;
+    blurHash?: string; // Optional tiny placeholder while image loads.
   };
   inStock: boolean;
 };
@@ -586,9 +593,11 @@ Manifest fields are UI instructions, not arbitrary code. The app only executes k
         "categoryId": "shoes",
         "price": 129.99,
         "image": {
+          "imageId": "img_nike_270_main",
           "url": "https://cdn.example.com/nike.jpg",
           "width": 800,
-          "height": 800
+          "height": 800,
+          "blurHash": "LKO2?U%2Tw=w]~RBVZRi};RPxuwH"
         },
         "inStock": true
       },
@@ -630,9 +639,11 @@ This removes duplicates automatically when multiple widgets return the same prod
       "price": 129.99,
       "rating": 4.6,
       "image": {
+        "imageId": "img_nike_270_main",
         "url": "https://cdn.example.com/nike.jpg",
         "width": 800,
-        "height": 800
+        "height": 800,
+        "blurHash": "LKO2?U%2Tw=w]~RBVZRi};RPxuwH"
       },
       "inStock": true
     }
@@ -714,12 +725,42 @@ Auction events are also patch updates. Full auction detail is fetched before ope
 
 ### 1. Product Listing Performance
 
-- Use **FlashList** for large product grids.
+- Use **FlashList** for large product grids because it recycles item views and performs better than rendering a large FlatList grid.
 - Pass `productIds` to the list instead of full product objects.
 - Each `ProductCard` selects `productsById[id]` from store.
+- Keep product cards lightweight: no expensive business logic, large nested trees, or row-level API calls.
+- Memoize product cards and keep `renderItem` / callbacks stable with `React.memo` and `useCallback`.
+- Use `extraData` intentionally only for state that should re-render visible rows, such as selected filter or layout mode.
 - Provide image `width` and `height` to calculate `aspectRatio` before image loads.
-- Prefetch next-page images after current page settles.
+- Prefetch images for items that are already loaded but not yet visible, plus next-page images after early pagination fetch.
+- Use `getItemType` for mixed rows such as product cards, sponsored cards, and flash-sale cards so FlashList can recycle similar views efficiently.
+- Prefer predictable card dimensions; use fixed aspect ratios instead of dynamic measurement-heavy layouts.
+- Use `removeClippedSubviews` carefully on Android-heavy screens, but test because complex transforms/absolute layouts can cause missing content.
 - Use stable keys: `product.id`, not index.
+- Profile on release builds and mid-range Android devices, not only simulator/debug mode.
+
+#### Image prefetching
+
+Use `FastImage.preload` for already-loaded products just below the viewport and for the first few products from the next page after `loadNextPage` completes.
+
+```typescript
+// Prefetch already-loaded products coming up next in the viewport.
+const upcomingProducts = loadedProducts.slice(
+  lastVisibleIndex + 1,
+  lastVisibleIndex + 7,
+);
+FastImage.preload(upcomingProducts.map((p) => ({ uri: p.image.url })));
+
+// After next-page data arrives, prefetch first few next-page images.
+FastImage.preload(
+  nextPageProducts.slice(0, 6).map((p) => ({
+    uri: p.image.url,
+    priority: FastImage.priority.normal,
+  })),
+);
+```
+
+Trigger `loadNextPage` around 60-70% through the list, for example `onEndReachedThreshold={0.4}`. Do not prefetch the whole catalog; cap the queue to avoid memory/network pressure.
 
 ### 2. Cursor Pagination
 
@@ -809,7 +850,7 @@ Use a normalized store for products, cursor pagination for listings, server-main
 - **Cart:** Server-maintained; optimistic UI allowed, server response wins.
 - **Guest cart:** Server scoped by `guest_session_token` stored in MMKV.
 - **Auth tokens:** Keychain/Keystore, never AsyncStorage/MMKV.
-- **Images:** Store width/height, use aspect ratio, prefetch next page.
+- **Images:** Backend sends `imageId`, CDN `url`, `width`, `height`, optional `blurHash`; client sets aspect ratio and prefetches next-page URLs.
 - **Home:** Server-driven manifest with above-fold eager fetch and below-fold lazy fetch.
 - **Widgets:** Support personalized Buy Again, recommendations, deals, sponsored rows, and category strips.
 - **Flash sale:** SSE for live deal state, server validates reservation/checkout, queue/token gate for major drops.
@@ -831,7 +872,10 @@ Use a normalized store for products, cursor pagination for listings, server-main
 - Flipkart mobile/app-like performance and offline/re-engagement case study: [Flipkart Lite case study](https://web.dev/flipkart/)
 - Flash-sale traffic and oversell prevention patterns: [Flash sale system design](https://www.techinterview.org/post/3233465613/system-design-flash-sale/)
 - Real-time inventory updates using WebSocket pattern: [WebSocket e-commerce flash sale case study](https://clickpatrol.com/knowledge-base/what-is-websocket/)
-- FlashList for React Native lists
+- React Native list performance: [Optimizing FlatList Configuration](https://reactnative.dev/docs/optimizing-flatlist-configuration)
+- FlashList for React Native lists: [FlashList docs](https://shopify.github.io/flash-list/)
+- FlashList recycling and item types: [FlashList usage](https://shopify.github.io/flash-list/docs/usage)
+- FlashList performant components: [Writing performant components](https://shopify.github.io/flash-list/docs/1.x/fundamentals/performant-components)
 - React Navigation deep linking and navigation state
 - MMKV for React Native storage
 - iOS Keychain and Android Keystore for secure token storage
