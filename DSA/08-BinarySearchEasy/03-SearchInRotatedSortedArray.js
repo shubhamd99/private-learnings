@@ -13,6 +13,8 @@
 // check which half is sorted, then check if target is in that half
 // if yes search that half, if no search the other half
 
+// Time: O(log n)
+// Space: O(1)
 /**
  * @param {number[]} nums
  * @param {number} target
