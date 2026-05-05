@@ -32,6 +32,7 @@ These are questions you should ask the interviewer before locking the requiremen
 - Should product listings use infinite scroll or page numbers?
 - Are product prices, inventory, and max quantity trusted from client or server?
 - Is checkout in scope: address, shipping, payment, confirmation?
+- Do we need coupons/promotions, delivery slots, refunds, or returns?
 - Should home screen layout be static or server-driven?
 - Which home widgets are required: hero banners, category strips, Buy Again, recommendations, flash-sale rows, sponsored slots?
 - Are real-time commerce features required: flash-sale claimed percentage, inventory countdown, auctions, stock updates?
@@ -51,10 +52,12 @@ These are questions you should ask the interviewer before locking the requiremen
 - **Search:** Navigate to a product search/autocomplete flow.
 - **Wishlist:** Toggle wishlist with instant UI feedback and persistence.
 - **Cart:** Add, update quantity, remove items, and show cart badge/subtotal.
+- **Coupons/promotions:** Apply/remove coupons and show discounts from server response.
 - **Server-maintained cart:** Cart is scoped to user account or guest session token and survives app restarts.
 - **Guest browsing:** Guest users can browse catalog and add to server-side guest cart.
 - **Guest to login migration:** Guest cart/wishlist should merge into account on login.
 - **Checkout:** Address selection, shipping method, payment, order creation, and confirmation.
+- **Payment recovery:** Recover order/payment state if app is killed or backgrounded during payment.
 - **Order history:** Show past orders and order detail/tracking.
 - **Offline browse:** Recently viewed products can be shown from local storage; cart mutations are disabled or queued carefully.
 - **Flash sale / live deals:** Show countdown, limited inventory, claimed percentage, deal price, and real-time sold-out state.
@@ -69,10 +72,13 @@ These are questions you should ask the interviewer before locking the requiremen
 - **Cart correctness:** Client never trusts local price, stock, or max quantity.
 - **Reliability:** Cart and checkout should recover from app kill, payment interruption, and network failure.
 - **Security:** Auth tokens stored in Keychain/Keystore, not AsyncStorage.
+- **Payment safety:** Order creation and payment confirmation must be idempotent to avoid duplicate orders/charges.
 - **Scalability:** Product entities should be normalized to avoid duplication across listing, wishlist, cart, and widgets.
 - **Offline-friendly:** Read-only cached content can render offline; unsafe mutations wait for network/server validation.
 - **Experiment-friendly:** Server-driven home widgets allow promotions/A-B tests without app release.
 - **Deal correctness:** Flash-sale inventory and auction bid status must be confirmed by server to prevent overselling or false winning states.
+- **Accessible:** Product cards, buttons, quantity steppers, and checkout inputs should support screen readers and large tap targets.
+- **Observable:** Track list performance, widget impressions/clicks, cart failures, checkout drop-offs, and live-update failures.
 
 ---
 
@@ -235,6 +241,16 @@ type VariantId = string;
 type QueryKey = string;
 type Cursor = string | null;
 
+type AddressInput = {
+  name: string;
+  phone: string;
+  line1: string;
+  line2?: string;
+  city: string;
+  state: string;
+  pincode: string;
+};
+
 type WidgetAction =
   | { type: "navigate"; screen: string; params?: Record<string, string> }
   | { type: "open_product"; productId: ProductId }
@@ -383,6 +399,19 @@ type CartStore = {
   pendingMutationId: string | null;
 };
 
+type CheckoutStore = {
+  // Checkout is multi-step and can be interrupted by payment app/browser flows.
+  step: "cart" | "address" | "shipping" | "payment" | "confirmation";
+  selectedAddressId: string | null;
+  shippingMethodId: string | null;
+  paymentMethod: "card" | "upi" | "wallet" | "cod" | null;
+  couponCode: string | null;
+  pendingOrderId: string | null; // Also persisted in MMKV for payment recovery.
+  paymentUrl: string | null; // Provider checkout/payment link opened by the app.
+  idempotencyKey: string | null; // Sent while creating order/payment.
+  status: "idle" | "validating" | "placing_order" | "payment_pending" | "error";
+};
+
 type UserSessionStore = {
   role: "guest" | "user";
   userId: string | null;
@@ -405,6 +434,7 @@ type EcommerceStore = CatalogStore &
   HomeStore &
   LiveCommerceStore &
   CartStore &
+  CheckoutStore &
   UserSessionStore &
   WishlistStore &
   RecentlyViewedStore;
@@ -425,6 +455,7 @@ type EcommerceStore = CatalogStore &
 | MMKV              | `recently_viewed_ids` | Offline/read-only browse      |
 | MMKV              | `guest_wishlist_ids`  | Guest wishlist before login   |
 | MMKV              | `home_snapshot`       | Fast home fallback            |
+| MMKV              | `pending_order_id`    | Recover payment/order flow    |
 | Keychain/Keystore | `access_token`        | Encrypted auth token          |
 | Keychain/Keystore | `refresh_token`       | Encrypted refresh token       |
 
@@ -463,6 +494,18 @@ type CartActions = {
   updateQty: (cartItemId: string, qty: number) => Promise<void>;
   removeFromCart: (cartItemId: string) => Promise<void>;
   validateCart: () => Promise<void>;
+  applyCoupon: (couponCode: string) => Promise<void>;
+};
+
+type CheckoutActions = {
+  fetchAddresses: () => Promise<void>;
+  addAddress: (address: AddressInput) => Promise<void>;
+  selectAddress: (addressId: string) => void;
+  fetchShippingMethods: (addressId: string) => Promise<void>;
+  selectShippingMethod: (shippingMethodId: string) => void;
+  selectPaymentMethod: (method: "card" | "upi" | "wallet" | "cod") => void;
+  placeOrder: () => Promise<void>; // Sends idempotencyKey and receives paymentUrl.
+  recoverPendingOrder: () => Promise<void>; // Uses pendingOrderId from MMKV.
 };
 
 type HomeActions = {
@@ -505,6 +548,8 @@ POST /cart/items
 PATCH /cart/items/:cartItemId
 DELETE /cart/items/:cartItemId
 POST /cart/validate
+POST /cart/coupons
+DELETE /cart/coupons/:couponCode
 
 # Auth
 POST /auth/login
@@ -514,7 +559,11 @@ POST /auth/refresh
 POST /auth/logout
 
 # Checkout / Orders
-POST /orders
+GET /addresses
+POST /addresses
+GET /shipping-methods?addressId=
+POST /orders                         # with Idempotency-Key header
+GET /orders/:orderId/status
 GET /orders
 GET /orders/:orderId
 
@@ -675,6 +724,51 @@ This removes duplicates automatically when multiple widgets return the same prod
 
 Important: cart response overwrites local optimistic state. Server wins for price, quantity, availability, and limits.
 
+### Checkout + Payment Flow
+
+Checkout should be server-validated. The backend creates the order and payment session/link, and the app opens the provider checkout. Final payment truth comes from backend/provider status, not from trusting the app callback.
+
+```text
+Cart → validate cart → select address → fetch shipping methods
+→ select shipping → POST /orders with idempotency key
+→ backend returns orderId + paymentUrl/paymentSession
+→ app opens payment SDK/link
+→ provider webhook updates backend order status
+→ app polls GET /orders/:orderId/status on return/foreground
+```
+
+### Create Order Response
+
+```json
+{
+  "orderId": "ord_123",
+  "provider": "razorpay",
+  "paymentUrl": "https://pay.example.com/session/ord_123",
+  "payableAmount": 297.98,
+  "currency": "INR",
+  "status": "payment_pending"
+}
+```
+
+Persist `orderId` and `paymentUrl` before opening the payment SDK/app. On return or app foreground, poll order status and move the user to confirmation, retry, or failure state. Backend should listen to provider webhooks and map payment result to order status because the app can be killed before receiving payment callback.
+
+### Order Status Response
+
+```json
+{
+  "orderId": "ord_123",
+  "status": "PAYMENT_FAILED",
+  "failureReason": "PAYMENT_DECLINED",
+  "retryPaymentUrl": "https://pay.example.com/session/ord_123_retry"
+}
+```
+
+- `CONFIRMED`: show confirmation and clear `pending_order_id`.
+- `PAYMENT_PENDING`: keep polling for a short time or show "Payment processing".
+- `PAYMENT_FAILED`: show retry payment CTA using `retryPaymentUrl`.
+- `ORDER_FAILED`: show failure reason and restore/refetch cart if server allows retry.
+- `CANCELLED`: clear pending order and return user to cart/order detail.
+
 ### Live Deal Event
 
 SSE is enough for one-way live deal updates because the client mostly listens for state changes.
@@ -789,8 +883,23 @@ Offset pagination is acceptable for small, stable personal lists such as order h
 - Validate cart before checkout.
 - Handle multi-device sync by refetching cart on app foreground.
 - Silent push can be used as a fast path for `cart_updated`.
+- Coupons, discounts, delivery fee, tax, and final payable amount come from server.
 
-### 5. Auth + Guest Session
+### 5. Checkout Reliability
+
+- Address and shipping selection only update local checkout state; final availability, shipping fee, tax, and discounts come from server.
+- Run `POST /cart/validate` before creating the order.
+- Generate an `idempotencyKey` before `POST /orders` so retries do not create duplicate orders.
+- Backend creates the payment session/link and returns `orderId` and `paymentUrl`.
+- Persist `pendingOrderId` and `paymentUrl` in MMKV before opening payment SDK/browser.
+- Backend receives provider webhooks and updates order status; client callback is only for UX.
+- On app foreground/return, call `GET /orders/:orderId/status` to recover.
+- On payment failure, keep the order in `PAYMENT_FAILED` and show retry payment. Do not create a new order unless backend explicitly expires the old one.
+- On order creation failure, show error and keep cart intact because server has not created a successful order.
+- If cart changed during checkout, rerun `POST /cart/validate` before payment.
+- Do not store card/UPI credentials in the app; delegate sensitive payment details to the payment provider SDK.
+
+### 6. Auth + Guest Session
 
 - Store access/refresh tokens in Keychain/Keystore.
 - Store guest session token in MMKV.
@@ -798,14 +907,14 @@ Offset pagination is acceptable for small, stable personal lists such as order h
 - On login, backend merges guest cart into account cart.
 - Client deletes guest token after successful merge.
 
-### 6. Offline Behavior
+### 7. Offline Behavior
 
 - Allow read-only recently viewed products from MMKV.
 - Show cached home snapshot if network is unavailable.
 - Disable checkout and cart mutations offline.
 - Wishlist can be optimistic locally, but must reconcile with server later.
 
-### 7. Server-Driven Home
+### 8. Server-Driven Home
 
 - Amazon/Flipkart-style home pages are feeds of heterogeneous widgets, not a single static page.
 - `/home/manifest` returns ordered widget descriptors: schema version, type, priority, data URL, layout, action, tracking metadata, and live-update flag.
@@ -819,7 +928,7 @@ Offset pagination is acceptable for small, stable personal lists such as order h
 - Unsupported schema versions should be ignored or mapped to a fallback widget.
 - Widget actions are allowlisted client actions, not server-sent JavaScript.
 
-### 8. Flash Sale / Live Deals
+### 9. Flash Sale / Live Deals
 
 - Treat flash sale as a first-class feature, not a normal product listing.
 - Show deal price, countdown, claimed percentage, low-stock/sold-out status, and max quantity.
@@ -829,12 +938,17 @@ Offset pagination is acceptable for small, stable personal lists such as order h
 - For very high-traffic drops, backend should use Redis/token bucket/queue based admission to avoid overselling and protect inventory writes.
 - Client should handle `SOLD_OUT`, `DEAL_EXPIRED`, `WAITLISTED`, and `RATE_LIMITED` states gracefully.
 
-### 9. Auctions / Bidding
+### 10. Auctions / Bidding
 
 - Use WebSocket only while auction product detail screen is open.
 - Bid placement should not be optimistic.
 - Server confirms accepted/outbid status.
 - On `closed` event, winner proceeds to checkout at locked price.
+
+### 11. Accessibility + Observability
+
+- Product cards, wishlist/cart buttons, quantity steppers, and checkout forms need `accessibilityLabel`, `accessibilityRole`, and large tap targets.
+- Track screen load time, list FPS/jank, image load failures, widget impressions/clicks, add-to-cart failures, checkout drop-offs, and live connection fallback rate.
 
 ---
 
@@ -848,6 +962,7 @@ Use a normalized store for products, cursor pagination for listings, server-main
 - **Product data:** `productsById` is global; lists/widgets/wishlist store only IDs.
 - **Listing pagination:** Cursor-based, keyed by category/filter/sort/search.
 - **Cart:** Server-maintained; optimistic UI allowed, server response wins.
+- **Checkout:** Validate cart, address, and shipping; backend returns payment link/session; use idempotency key; persist `pendingOrderId`; recover order status on foreground.
 - **Guest cart:** Server scoped by `guest_session_token` stored in MMKV.
 - **Auth tokens:** Keychain/Keystore, never AsyncStorage/MMKV.
 - **Images:** Backend sends `imageId`, CDN `url`, `width`, `height`, optional `blurHash`; client sets aspect ratio and prefetches next-page URLs.
@@ -856,6 +971,7 @@ Use a normalized store for products, cursor pagination for listings, server-main
 - **Flash sale:** SSE for live deal state, server validates reservation/checkout, queue/token gate for major drops.
 - **Offline:** Recently viewed/home snapshot only; cart/checkout require server.
 - **Bidding:** WebSocket for auctions; bid placement is server-confirmed, not optimistic.
+- **Observability:** Track list jank, widget CTR, add-to-cart failures, checkout drop-offs, and live fallback rate.
 
 ### Extras: Native Storage Choices
 
