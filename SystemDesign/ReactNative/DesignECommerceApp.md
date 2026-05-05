@@ -1,808 +1,709 @@
-# System Design: E-Commerce App (React Native / Android)
+# E-Commerce App System Design (React Native)
 
-**Core idea:** Product catalog is fetched with cursor-based pagination and rendered via FlashList. Products are stored in a normalized `allIds + byId` map so a price update never re-renders every card. Cart is server-maintained and tied to the user's account (or a guest session token) — it works across devices and survives app kills without any local storage. Cart mutations are optimistic on the client but the server response is always applied back, and prices/limits are never trusted from the client. Add-to-cart and wishlist are optimistic. Images carry `width`/`height` so aspect ratio is set before the first byte arrives. Auth is JWT-based with Keychain storage; guest sessions use a UUID session token (in MMKV) to scope the server-side cart, which merges into the account on login. The home screen is server-driven: a single `/home/manifest` call returns an ordered widget list; each widget fetches its own data independently so above-fold content renders in under 1 s while below-fold widgets lazy-load on scroll. Auction products stream real-time bid state over WebSocket. Promotional banners update via SSE with a 30-second polling fallback.
+Designing an e-commerce app is a strong React Native system design problem because it touches catalog browsing, server-driven home screens, pagination, image performance, cart consistency, authentication, checkout, offline behavior, and real-time updates.
 
-```mermaid
-graph TD
-    OPEN[App opens] --> AUTH{Token?}
-    AUTH -->|yes| CART[GET /cart]
-    AUTH -->|guest| GCART[GET /cart via session token]
-    AUTH --> HOME[Home screen]
+The goal is not to build Amazon end to end. The goal is to design a production-ready mobile shopping experience with clear frontend responsibilities and safe backend contracts.
 
-    HOME -->|tap category| LIST[Product listing]
-    LIST --> FETCH[GET /products cursor-paginated]
-    FETCH --> STORE[Normalize into byId + allIds]
-    SCROLL[Near bottom] --> FETCH
+## Question
 
-    FILTER[Filter / sort] --> RESET[New query key — clear allIds]
-    RESET --> FETCH
+Design a React Native e-commerce app where users can browse products, search/filter/sort listings, view product details, add products to cart/wishlist, checkout, and track orders.
 
-    STORE -->|tap card| DETAIL[Product detail]
-    DETAIL -->|not in byId| FETCH_DETAIL[GET /products/:id]
+Some real-life examples:
 
-    DETAIL --> ADD[Add to cart — optimistic]
-    ADD -->|fail| REVERT[Revert + toast]
-    DETAIL --> WISH[Wishlist toggle — optimistic]
+- Amazon / Flipkart product browsing
+- Myntra product listing and wishlist
+- Truemeds medicine catalog and cart
+- Marketplace apps with server-driven home widgets
+- Auction or flash-sale products with live updates
 
-    CART --> CHECKOUT[Cart validate → address → payment]
-    CHECKOUT -->|POST /orders| CONFIRM[Confirmation]
-    CONFIRM --> TRACK[Order tracking]
-```
-
-```mermaid
-graph TD
-    LAUNCH[Launch] --> TOKEN{Keychain?}
-    TOKEN -->|valid| HOME
-    TOKEN -->|expired| REFRESH[POST /auth/refresh]
-    REFRESH -->|ok| HOME
-    REFRESH -->|fail| GUEST[Guest — server cart scoped to token]
-    TOKEN -->|none| GUEST
-    GUEST --> HOME[Home]
-
-    HOME --> MANIFEST[GET /home/manifest]
-    MANIFEST -->|above_fold| EAGER[Fetch tier-1 widgets immediately]
-    MANIFEST -->|below_fold| LAZY[Fetch on viewport entry]
-    EAGER & LAZY --> WIDGET[Each widget fetches own data + cursor]
-
-    GUEST -->|protected action| LOGIN[Login / OTP / OAuth]
-    LOGIN --> KEYCHAIN[Store tokens in Keychain]
-    KEYCHAIN --> MERGE[POST /auth/login merges guest cart]
-    MERGE --> HOME
-
-    SSE[SSE /home/banners/live] -->|banner_updated| PATCH[Patch widget store]
-    SSE -->|fail| POLL[30s poll fallback]
-```
-
-```mermaid
-graph TD
-    PDP[Product detail — auction] --> WS[WS /auctions/:id/stream]
-    WS -->|new_bid| UPDATE[Patch currentBid + minNextBid]
-    WS -->|outbid| NOTIFY[Local push notification]
-    WS -->|closed| RESULT{Won?}
-    RESULT -->|yes| CHECKOUT[Checkout at locked price]
-    RESULT -->|no| LIST[Back to listing]
-
-    BID[Place Bid] --> POST[POST /auctions/:id/bids]
-    POST -->|accepted| LEAD[userBidStatus = leading]
-    POST -->|outbid| HIGHER[Show minNextBid — re-enter]
-    POST -->|error| TOAST[Toast + retry]
-```
+The backend APIs are provided for products, cart, auth, orders, home widgets, and live updates.
 
 ---
 
-## 1. Requirements (R)
+## Clarifying Questions
 
-### Functional
+These are questions you should ask the interviewer before locking the requirements:
 
-- **Home screen:** Promotional banners, category chips, featured / trending products.
-- **Product listing:** Browse by category; filter by price range, brand, rating; sort by price/popularity/newest.
-- **Infinite scroll:** Load more products as user scrolls — no full reload.
-- **Product detail:** Images carousel, description, variants (size/color), seller info, reviews, stock status.
-- **Add to cart:** Instant feedback; cart badge updates immediately.
-- **Wishlist:** Save products; persisted across sessions.
-- **Cart:** View items, update quantity, remove, see subtotal; cart is server-maintained and works across devices and sessions.
-- **Checkout:** Enter/select address, choose shipping, select payment method, place order.
-- **Order confirmation + history:** Confirmation screen after order, list of past orders.
-- **Search:** Fuzzy product search with suggestions (debounced, see SearchWithAutocomplete design).
-- **Offline browse:** Recently viewed products readable from MMKV without connection; cart mutations are disabled offline and retried on reconnect.
-- **Guest browsing:** Full product catalog accessible without login; cart is scoped on the server to a UUID session token stored in MMKV; recently-viewed stored locally in MMKV.
-- **Authentication:** Email + OTP and Google/Apple OAuth; JWT access + refresh token pair stored in Keychain/Keystore.
-- **Guest → auth migration:** Cart and wishlist items preserved when a guest logs in — merged server-side.
-- **Home widget feed:** 30+ heterogeneous widgets (hero banners, category strips, recommendation rows, flash-sale countdowns, order history strip, sponsored banners) — layout and order driven by the server.
-- **Per-widget pagination:** Each widget section independently loads more items with its own cursor; a "load more" at the end of a carousel or section does not affect other widgets.
-- **Recommendation section:** Personalized product rows; cold-start guests see popularity-based fallback.
-- **Order history strip:** Last 10 orders shown as a home widget; tapping opens full order detail.
-- **Live banners:** Hero banners update in near-real-time (< 5 s latency) for flash sales and promotions without requiring the user to pull-to-refresh.
-- **Bidding / auction products:** Real-time current bid price, countdown timer, leaderboard; outbid push notification; winning user proceeds to checkout at locked-in bid price.
-
-### Non-functional
-
-- **Product grid renders at 60 fps** on mid-range Android.
-- **Cart never lost** — lives on the server tied to user account or session token; survives process kill, crash, and reinstall without local storage.
-- **Images never cause layout shift** — aspect ratio known before first byte.
-- **No duplicate products** regardless of how pages overlap at cursor boundaries.
-- **Stale-while-revalidate** — show cached listing instantly, refresh in background.
-- **Inventory validated before checkout** — user never gets stuck at payment because of a stale stock count.
-- **Above-fold widgets render in < 1 s** — only tier-1 widgets block initial render; all others lazy-load.
-- **Auth tokens never in AsyncStorage** — Keychain (iOS) / Keystore (Android) only; tokens are not readable by other apps.
-- **Bid placement is not optimistic** — server confirmation required; no false "you're winning" state shown before the API response.
-- **Banner update latency < 5 s** — SSE push preferred; 30 s polling as fallback when SSE is unavailable.
-- **Widget layout is server-controlled** — A/B tests, promotions, and new widget types ship without a client release.
+- Should users be able to browse without login?
+- Is cart local-only or server-maintained?
+- Should cart sync across devices?
+- Do we need wishlist, recently viewed, and offline browsing?
+- What product listing features are required: category, filter, sort, search?
+- Should product listings use infinite scroll or page numbers?
+- Are product prices, inventory, and max quantity trusted from client or server?
+- Is checkout in scope: address, shipping, payment, confirmation?
+- Should home screen layout be static or server-driven?
+- Which home widgets are required: hero banners, category strips, Buy Again, recommendations, flash-sale rows, sponsored slots?
+- Are real-time commerce features required: flash-sale claimed percentage, inventory countdown, auctions, stock updates?
+- What performance target should we optimize for on mid-range Android?
 
 ---
 
-## 2. Architecture (A)
+## R - Requirements Exploration
 
-| Component                          | What it does                                                                                                                                      |
-| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **ProductStore (Zustand)**         | Normalized `allIds + byId` map. All listing screens read from here                                                                                |
-| **PaginationManager**              | Per-(category+filter+sort) slice: tracks `nextCursor`, `hasMore`, `isFetching`                                                                    |
-| **CartStore (Zustand)**            | In-memory mirror of the server cart; mutations are optimistic and reconciled from server responses; prices and limits always come from the server |
-| **WishlistStore (Zustand + MMKV)** | Set of wishlisted product IDs; persisted across restarts                                                                                          |
-| **ImagePrefetchQueue**             | Prefetches images for the next page while user reads the current one                                                                              |
-| **CheckoutStateMachine**           | Manages multi-step checkout: address → shipping → payment → confirmation                                                                          |
-| **OptimisticLayer**                | Applies cart/wishlist mutations instantly; reverts on API failure                                                                                 |
-| **MMKV Persistence**               | Wishlist, recently viewed, guest session token — survives app kill; 10× faster than AsyncStorage                                                  |
-| **AuthStore (Zustand)**            | Tracks userId, role (guest / user), token expiry; tokens stored in Keychain not MMKV                                                              |
-| **HomeManifestStore**              | Ordered array of widget descriptors from `/home/manifest`; drives home screen layout                                                              |
-| **WidgetDataStore**                | Per-widgetId items + cursor; all product widgets share the global `byId` map to avoid duplication                                                 |
-| **BannerSSEClient**                | SSE connection to `/home/banners/live`; reconnects with exponential backoff; falls back to 30s polling                                            |
-| **BidStore (Zustand)**             | Per-auction: currentBid, timeLeft, leaderboard, userBidStatus; fed by WebSocket events                                                            |
-| **AuctionSocketManager**           | One WS connection per open auction screen; reconnects on drop; closes on screen unmount                                                           |
+### Functional Requirements
+
+- **Home screen:** Show banners, categories, recommendation rows, flash sale sections, and recently viewed products.
+- **Server-driven widgets:** Home layout, widget order, widget type, and data URLs are controlled by backend, similar to Amazon/Flipkart-style personalized home feeds.
+- **Personalized home:** Support widgets like Buy Again, recommended for you, trending products, deals, sponsored rows, recently viewed, and order history strip.
+- **Product listing:** Browse by category and support filters, sort, and cursor-based pagination.
+- **Product detail:** Show image carousel, product info, variants, stock, seller info, rating, and reviews summary.
+- **Search:** Navigate to a product search/autocomplete flow.
+- **Wishlist:** Toggle wishlist with instant UI feedback and persistence.
+- **Cart:** Add, update quantity, remove items, and show cart badge/subtotal.
+- **Server-maintained cart:** Cart is scoped to user account or guest session token and survives app restarts.
+- **Guest browsing:** Guest users can browse catalog and add to server-side guest cart.
+- **Guest to login migration:** Guest cart/wishlist should merge into account on login.
+- **Checkout:** Address selection, shipping method, payment, order creation, and confirmation.
+- **Order history:** Show past orders and order detail/tracking.
+- **Offline browse:** Recently viewed products can be shown from local storage; cart mutations are disabled or queued carefully.
+- **Flash sale / live deals:** Show countdown, limited inventory, claimed percentage, deal price, and real-time sold-out state.
+- **Bidding / auction products:** Show current bid, minimum next bid, countdown, leaderboard, outbid event, and final result.
+- **Live updates:** Promotional banners and deal inventory update via SSE/WebSocket with polling fallback.
+
+### Non-Functional Requirements
+
+- **Performance:** Product listing should scroll smoothly on mid-range Android.
+- **Low layout shift:** Product images should include width/height so aspect ratio is known before loading.
+- **Consistency:** Product list must not show duplicates when pages overlap.
+- **Cart correctness:** Client never trusts local price, stock, or max quantity.
+- **Reliability:** Cart and checkout should recover from app kill, payment interruption, and network failure.
+- **Security:** Auth tokens stored in Keychain/Keystore, not AsyncStorage.
+- **Scalability:** Product entities should be normalized to avoid duplication across listing, wishlist, cart, and widgets.
+- **Offline-friendly:** Read-only cached content can render offline; unsafe mutations wait for network/server validation.
+- **Experiment-friendly:** Server-driven home widgets allow promotions/A-B tests without app release.
+- **Deal correctness:** Flash-sale inventory and auction bid status must be confirmed by server to prevent overselling or false winning states.
 
 ---
 
-## 3. Data Model (D)
+## A - Architecture / High-Level Design
 
-### Product (normalized in-memory + MMKV for recently viewed)
+```mermaid
+flowchart LR
+    USER[User]
+    API[E-Commerce Backend APIs]
+    REALTIME[SSE / WebSocket]
+    LOCAL[MMKV + Keychain/Keystore]
 
-```json
-{
-  "id": "prod_nike_air_001",
-  "title": "Nike Air Max 270",
-  "brand": "Nike",
-  "categoryId": "cat_shoes",
-  "price": 129.99,
-  "originalPrice": 159.99,
-  "discountPct": 19,
-  "rating": 4.6,
-  "reviewCount": 2840,
-  "images": [
-    {
-      "url": "https://cdn.shop.com/products/nike_270_1.jpg",
-      "width": 800,
-      "height": 800
-    },
-    {
-      "url": "https://cdn.shop.com/products/nike_270_2.jpg",
-      "width": 800,
-      "height": 800
-    }
-  ],
-  "variants": [
-    { "id": "var_001_8", "label": "Size 8", "inStock": true },
-    { "id": "var_001_9", "label": "Size 9", "inStock": false }
-  ],
-  "inStock": true,
-  "tags": ["running", "lifestyle"]
-}
+    subgraph APP[React Native App]
+        direction LR
+
+        subgraph UI[UI Layer]
+            HOME[Home UI]
+            LIST[Product Listing UI]
+            PDP[Product Detail UI]
+            CART[Cart UI]
+            CHECKOUT[Checkout UI]
+        end
+
+        CONTROLLER[Screen Controllers]
+        STORE[Zustand Stores]
+        NETWORK[Network Manager]
+        WIDGET[Home Widget Engine]
+        LIVE[Live Commerce Manager]
+        IMAGE[Image Prefetch + Cache]
+        AUTH[Auth Manager]
+    end
+
+    USER --> UI
+    UI -->|events| CONTROLLER
+    CONTROLLER -->|read/write| STORE
+    STORE -->|render state| UI
+
+    CONTROLLER -->|API calls| NETWORK
+    NETWORK --> API
+    API --> NETWORK
+    NETWORK -->|data/error| CONTROLLER
+
+    HOME --> WIDGET
+    WIDGET --> NETWORK
+    WIDGET --> STORE
+    LIVE --> NETWORK
+    LIVE --> STORE
+    AUTH --> LOCAL
+    STORE --> LOCAL
+    IMAGE --> API
+    REALTIME --> LIVE
+    CONFIG[Server-driven widget config] -.-> WIDGET
 ```
 
-- `images[].width` + `images[].height` — client sets `aspectRatio` before image loads → zero layout shift.
-- `variants` on the list card can be omitted (lighter payload); fetched in full on product detail.
+### UI Layer
 
-### ProductStore shape
+- Renders screens and captures user interactions.
+- Uses FlashList for product grids and horizontal lists.
+- Reads product/cart/widget state from Zustand stores.
+
+### Screen Controllers
+
+- Orchestrate screen behavior: fetch first page, load next page, apply filters, submit cart mutations, and start checkout.
+- Build stable query keys for product listing and widget pagination.
+- Ignore stale responses using request ids or abort controllers.
+
+### Zustand Stores
+
+- Store normalized products in `productsById`.
+- Store listing/query slices separately from product entities.
+- Store cart snapshot returned by server.
+- Store widget manifest and per-widget data.
+- Store flash-sale/deal state separately from product entities.
+- Store optimistic wishlist/cart state while network request is pending.
+
+### Home Widget Engine
+
+- Reads `/home/manifest` and renders widgets in backend-defined order.
+- Fetches above-fold widgets immediately and below-fold widgets when they enter viewport.
+- Supports heterogeneous widgets: hero banners, category strips, Buy Again, product carousel, flash-sale row, sponsored row, recently viewed, and order history strip.
+- Product widgets store only product IDs and reuse the global `productsById` map.
+
+### Live Commerce Manager
+
+- Owns SSE/WebSocket subscriptions for flash sales, live deals, banners, and auctions.
+- Updates `dealsById` and `auctionsById` without refetching the full product entity.
+- Uses SSE for one-way deal updates and WebSocket for bidding.
+- Falls back to short polling when the live connection fails.
+
+### Network Manager
+
+- Calls backend APIs and returns parsed data or normalized errors.
+- Handles timeout, retry for safe GET requests, auth refresh, and request cancellation.
+- Sends `Authorization` token for logged-in users or `X-Session-Token` for guests.
+
+### Auth Manager
+
+- Stores access/refresh tokens in Keychain/Keystore.
+- Stores guest session token in MMKV.
+- Refreshes access token and triggers guest-cart merge on login.
+
+### Local Persistence
+
+- **Keychain/Keystore:** Auth tokens only.
+- **MMKV:** Guest session token, recently viewed product IDs, wishlist IDs if guest/local, and small home snapshots.
+- **Do not store:** Trusted cart price, inventory, or payment state as source of truth.
+
+### Real-Time Layer
+
+- SSE is good for one-way updates such as live banners, flash-sale stock/claimed percentage, and deal status.
+- WebSocket is better for interactive real-time flows such as auctions/bidding.
+- Polling fallback is used when SSE/WebSocket is unavailable.
+- Close live connections on screen unmount or when the widget leaves the viewport for long enough.
+
+---
+
+## D - Data Model
+
+Use one Zustand store split into logical slices. The important design choice is normalization: product data lives once in `productsById`; listing, widget, wishlist, and recently viewed slices store only product IDs.
 
 ```typescript
-type ProductStore = {
-  allIds: string[]; // ordered IDs for current query
-  byId: Record<string, Product>; // O(1) lookup
-  paginationByQuery: Record<
-    string,
+type ProductId = string;
+type VariantId = string;
+type QueryKey = string;
+type Cursor = string | null;
+
+type Product = {
+  id: ProductId;
+  title: string;
+  brand: string;
+  categoryId: string;
+  price: number;
+  originalPrice?: number;
+  discountPct?: number;
+  rating?: number;
+  reviewCount?: number;
+  image: {
+    url: string;
+    width: number; // Used to calculate aspectRatio before image loads.
+    height: number;
+  };
+  inStock: boolean;
+};
+
+type CatalogStore = {
+  // Normalized product entities. Object/map for O(1) lookup.
+  productsById: Record<ProductId, Product>;
+
+  // Product ids ordered per category/filter/sort/search query.
+  // Array because list order matters.
+  listingByQuery: Record<
+    QueryKey,
     {
-      // key = "cat_shoes|sort=price|minPrice=50"
-      nextCursor: string | null;
-      hasMore: boolean;
-      isFetching: boolean;
+      productIds: ProductId[];
+      nextCursor: Cursor;
+      status: "idle" | "loading" | "loadingMore" | "error";
+      error: string | null;
+      fetchedAt: number;
+      expiresAt: number;
     }
   >;
 };
+
+type HomeStore = {
+  // Server controls widget order and type.
+  manifest: {
+    widgetId: string;
+    type:
+      | "hero_banner"
+      | "category_strip"
+      | "buy_again"
+      | "product_carousel"
+      | "flash_sale"
+      | "live_deal"
+      | "order_history_strip"
+      | "sponsored_banner";
+    priority: "above_fold" | "below_fold";
+    dataUrl: string;
+    liveUpdates?: boolean;
+  }[];
+
+  // Per-widget data. Product widgets store productIds only.
+  widgetDataById: Record<
+    string,
+    {
+      itemIds: string[];
+      nextCursor: Cursor;
+      status: "idle" | "loading" | "loadingMore" | "error";
+      expiresAt: number;
+    }
+  >;
+};
+
+type LiveCommerceStore = {
+  // Flash-sale/live-deal state changes frequently, so keep it separate from product metadata.
+  dealsById: Record<
+    string,
+    {
+      dealId: string;
+      productId: ProductId;
+      dealPrice: number;
+      originalPrice: number;
+      startsAt: string;
+      endsAt: string;
+      claimedPct: number;
+      stockStatus: "available" | "low_stock" | "sold_out" | "expired";
+      streamStatus:
+        | "idle"
+        | "connecting"
+        | "open"
+        | "fallback_polling"
+        | "closed";
+    }
+  >;
+
+  auctionsById: Record<
+    string,
+    {
+      auctionId: string;
+      productId: ProductId;
+      currentBid: number;
+      minNextBid: number;
+      endsAt: string;
+      status: "active" | "ending_soon" | "closed";
+      userBidStatus: "none" | "leading" | "outbid" | "won" | "lost";
+      wsStatus: "connecting" | "open" | "reconnecting" | "closed";
+    }
+  >;
+};
+
+type CartStore = {
+  // Server is source of truth. Client mirrors last server response.
+  cartId: string | null;
+  items: {
+    cartItemId: string;
+    productId: ProductId;
+    variantId?: VariantId;
+    qty: number;
+    title: string;
+    imageUrl: string;
+    unitPrice: number; // From server response, not computed locally.
+    maxQty: number; // From server response.
+  }[];
+  subtotal: number;
+  status: "idle" | "syncing" | "mutating" | "error";
+  pendingMutationId: string | null;
+};
+
+type UserSessionStore = {
+  role: "guest" | "user";
+  userId: string | null;
+  guestSessionToken: string | null; // Stored in MMKV.
+  accessTokenExpiresAt: number | null; // Token itself lives in Keychain/Keystore.
+};
+
+type WishlistStore = {
+  // Set-like map for O(1) lookup.
+  wishlistedById: Record<ProductId, true>;
+  pendingById: Record<ProductId, "adding" | "removing">;
+};
+
+type RecentlyViewedStore = {
+  // Array because order matters: newest first.
+  productIds: ProductId[];
+};
+
+type EcommerceStore = CatalogStore &
+  HomeStore &
+  LiveCommerceStore &
+  CartStore &
+  UserSessionStore &
+  WishlistStore &
+  RecentlyViewedStore;
 ```
 
-### Cart item (server-sourced, mirrored in Zustand)
+### Why normalize products?
 
-```json
-{
-  "productId": "prod_nike_air_001",
-  "variantId": "var_001_8",
-  "qty": 2,
-  "priceAtAdd": 129.99,
-  "title": "Nike Air Max 270",
-  "imageUrl": "https://cdn.shop.com/products/nike_270_1.jpg"
-}
-```
+- Listing, wishlist, recommendations, and recently viewed can reference the same product.
+- One stock/price update patches one product entity.
+- FlashList receives only IDs, reducing re-renders.
+- Duplicate products across cursor pages can be filtered before append.
 
-- `priceAtAdd` — server sets this at add time; shown as "price changed" warning if `/cart/validate` returns a different current price.
-- `title` + `imageUrl` — cart renders without joining back to ProductStore.
-- All prices and `maxQuantity` values come from the server response — the client never computes or trusts local copies.
+### Local storage keys
 
-### User / Session
-
-```json
-{
-  "userId": "usr_abc123",
-  "email": "user@example.com",
-  "displayName": "Shubham",
-  "avatarUrl": "https://cdn.shop.com/avatars/abc123.jpg",
-  "role": "user"
-}
-```
-
-**Keychain keys** (never AsyncStorage — OS-level encrypted storage):
-
-| Key             | Value                                                   |
-| --------------- | ------------------------------------------------------- |
-| `access_token`  | JWT, 15-min TTL — sent as `Authorization: Bearer`       |
-| `refresh_token` | Opaque token, 30-day TTL — sent only to `/auth/refresh` |
-| `user_id`       | Plain string — fast hydration before token decode       |
-
-**Guest session:** `userId` is null; `role = "guest"`. A UUID `guest_session_token` is generated on first launch and stored in MMKV; it is sent as `X-Session-Token` on every request so the server can scope the guest's cart. On login, the server merges the guest cart into the account cart — the client deletes the MMKV token and starts using the auth token exclusively.
+| Store             | Key                   | Why it is stored locally      |
+| ----------------- | --------------------- | ----------------------------- |
+| MMKV              | `guest_session_token` | Scopes server-side guest cart |
+| MMKV              | `recently_viewed_ids` | Offline/read-only browse      |
+| MMKV              | `guest_wishlist_ids`  | Guest wishlist before login   |
+| MMKV              | `home_snapshot`       | Fast home fallback            |
+| Keychain/Keystore | `access_token`        | Encrypted auth token          |
+| Keychain/Keystore | `refresh_token`       | Encrypted refresh token       |
 
 ---
 
-### Widget Manifest Entry
+## I - Interface Definition (API)
+
+### Client API / Store Actions
+
+```typescript
+type CatalogActions = {
+  fetchProducts: (params: {
+    categoryId?: string;
+    searchQuery?: string;
+    filters?: Record<string, string | number | boolean>;
+    sort?: "price_asc" | "price_desc" | "popular" | "newest";
+    cursor?: Cursor;
+  }) => Promise<void>;
+
+  loadNextPage: (queryKey: QueryKey) => Promise<void>;
+  patchProduct: (productId: ProductId, patch: Partial<Product>) => void;
+};
+
+type CartActions = {
+  fetchCart: () => Promise<void>;
+  addToCart: (params: {
+    productId: ProductId;
+    variantId?: VariantId;
+    qty: number;
+  }) => Promise<void>;
+  updateQty: (cartItemId: string, qty: number) => Promise<void>;
+  removeFromCart: (cartItemId: string) => Promise<void>;
+  validateCart: () => Promise<void>;
+};
+
+type HomeActions = {
+  fetchHomeManifest: () => Promise<void>;
+  fetchWidgetData: (widgetId: string, cursor?: Cursor) => Promise<void>;
+};
+
+type LiveCommerceActions = {
+  subscribeToDeal: (dealId: string) => void;
+  unsubscribeFromDeal: (dealId: string) => void;
+  subscribeToAuction: (auctionId: string) => void;
+  placeBid: (params: { auctionId: string; amount: number }) => Promise<void>;
+};
+```
+
+### Backend APIs
+
+```http
+# Catalog
+GET /products?categoryId=&search=&sort=&filters=&cursor=&limit=20
+GET /products/:productId
+GET /products?ids=id1,id2,id3
+GET /categories
+
+# Server-driven home
+GET /home/manifest
+GET /home/widgets/:widgetId?cursor=&limit=
+GET /home/banners/live
+
+# Live commerce
+GET /deals/:dealId
+GET /deals/:dealId/live
+GET /deals/live
+POST /deals/:dealId/reserve
+WS  /auctions/:auctionId/stream
+
+# Cart
+GET /cart
+POST /cart/items
+PATCH /cart/items/:cartItemId
+DELETE /cart/items/:cartItemId
+POST /cart/validate
+
+# Auth
+POST /auth/login
+POST /auth/otp/verify
+POST /auth/oauth
+POST /auth/refresh
+POST /auth/logout
+
+# Checkout / Orders
+POST /orders
+GET /orders
+GET /orders/:orderId
+
+# Auctions / bidding
+GET /auctions/:auctionId
+POST /auctions/:auctionId/bids
+WS /auctions/:auctionId/stream
+```
+
+### Home Manifest Response
 
 ```json
 {
-  "widgetId": "wgt_hero_banner",
-  "type": "hero_banner",
-  "priority": "above_fold",
-  "dataUrl": "/home/widgets/wgt_hero_banner",
-  "config": { "autoPlay": true, "intervalMs": 4000 },
-  "liveUpdates": true
+  "widgets": [
+    {
+      "widgetId": "w_hero_1",
+      "type": "hero_banner",
+      "priority": "above_fold",
+      "dataUrl": "/home/widgets/w_hero_1",
+      "liveUpdates": true
+    },
+    {
+      "widgetId": "w_flash_sale",
+      "type": "flash_sale",
+      "priority": "above_fold",
+      "dataUrl": "/home/widgets/w_flash_sale",
+      "liveUpdates": true
+    },
+    {
+      "widgetId": "w_buy_again",
+      "type": "buy_again",
+      "priority": "below_fold",
+      "dataUrl": "/home/widgets/w_buy_again"
+    }
+  ]
 }
 ```
 
-- `priority`: `"above_fold"` (fetch on mount) | `"below_fold"` (fetch on viewport entry).
-- `liveUpdates: true` — client opens SSE for this widget; banner patches arrive without polling.
-- `config` — widget-type-specific display config. Changing it server-side reshapes the UI without a release.
-
-**Supported widget types:**
-
-| type                   | Description                                                    |
-| ---------------------- | -------------------------------------------------------------- |
-| `hero_banner`          | Full-width rotating promotional banners                        |
-| `category_strip`       | Horizontal scrollable category chips                           |
-| `product_carousel`     | Horizontal product row (recommendations, trending, flash sale) |
-| `flash_sale_countdown` | Countdown + product grid for a timed sale                      |
-| `order_history_strip`  | Last N orders as compact cards                                 |
-| `search_bar`           | Pinned search widget                                           |
-| `referral_banner`      | Single CTA banner                                              |
-| `sponsored_row`        | Advertiser-funded product row                                  |
-
----
-
-### Widget Data Envelope
+### Widget Data Response
 
 ```json
 {
-  "widgetId": "wgt_recommendations",
-  "items": [{ "productId": "prod_001" }, { "productId": "prod_002" }],
-  "nextCursor": "cursor_xyz",
-  "hasMore": true,
+  "widgetId": "w_flash_sale",
+  "items": [
+    {
+      "productId": "prod_123",
+      "dealId": "deal_123"
+    }
+  ],
+  "nextCursor": "cursor_next",
   "ttlMs": 300000
 }
 ```
 
-- `items` for product widgets contain only `productId`; full product objects are merged into the shared `byId` map.
-- `ttlMs` — client caches widget data for this duration before re-fetching on scroll-in.
+Product widgets return product IDs and optional metadata like `dealId`; full product data is merged into `productsById`.
 
-**WidgetDataStore shape:**
-
-```typescript
-type WidgetDataStore = {
-  widgets: Record<
-    string,
-    {
-      // key = widgetId
-      status: "idle" | "loading" | "ready" | "error";
-      itemIds: string[]; // ordered IDs (product or order)
-      nextCursor: string | null;
-      hasMore: boolean;
-      fetchedAt: number; // ms — for TTL check
-    }
-  >;
-};
-```
-
----
-
-### Auction / Bid
+### Product Listing Response
 
 ```json
 {
-  "auctionId": "auc_watch_001",
-  "productId": "prod_watch_001",
-  "currentBid": 250.0,
-  "minNextBid": 260.0,
-  "reservePrice": 200.0,
-  "reserveMet": true,
-  "endsAt": "2026-04-25T18:00:00Z",
-  "status": "active",
-  "totalBids": 18,
+  "products": [
+    {
+      "id": "prod_123",
+      "title": "Nike Air Max 270",
+      "brand": "Nike",
+      "categoryId": "shoes",
+      "price": 129.99,
+      "rating": 4.6,
+      "image": {
+        "url": "https://cdn.example.com/nike.jpg",
+        "width": 800,
+        "height": 800
+      },
+      "inStock": true
+    }
+  ],
+  "nextCursor": "cursor_next"
+}
+```
+
+### Cart Mutation Response
+
+```json
+{
+  "cartId": "cart_123",
+  "items": [
+    {
+      "cartItemId": "item_1",
+      "productId": "prod_123",
+      "variantId": "var_8",
+      "qty": 2,
+      "title": "Nike Air Max 270",
+      "imageUrl": "https://cdn.example.com/nike.jpg",
+      "unitPrice": 129.99,
+      "maxQty": 5
+    }
+  ],
+  "subtotal": 259.98
+}
+```
+
+Important: cart response overwrites local optimistic state. Server wins for price, quantity, availability, and limits.
+
+### Live Deal Event
+
+SSE is enough for one-way live deal updates because the client mostly listens for state changes.
+
+```json
+{
+  "event": "deal_updated",
+  "dealId": "deal_123",
+  "productId": "prod_123",
+  "dealPrice": 99.99,
+  "claimedPct": 82,
+  "stockStatus": "low_stock",
+  "endsAt": "2026-05-05T15:30:00Z"
+}
+```
+
+### Auction Event
+
+WebSocket is better for auctions because bid placement and bid state are interactive and latency-sensitive.
+
+```json
+{
+  "event": "new_bid",
+  "auctionId": "auc_123",
+  "currentBid": 250,
+  "minNextBid": 260,
   "userBidStatus": "outbid",
-  "userHighBid": 240.0
+  "endsAt": "2026-05-05T16:00:00Z"
 }
 ```
 
-- `minNextBid` — minimum the user must enter; enforced client-side for UX, server-side for integrity.
-- `reserveMet` — if false, show "Reserve not met" warning; winner still pays their bid but seller can refuse.
-- `userBidStatus`: `"none"` | `"leading"` | `"outbid"` | `"won"` | `"lost"`.
+---
 
-**BidStore shape (Zustand):**
+## O - Optimizations and Deep Dive
 
-```typescript
-type BidStore = {
-  byAuctionId: Record<string, AuctionState>;
-};
-type AuctionState = {
-  auctionId: string;
-  currentBid: number;
-  minNextBid: number;
-  endsAt: string;
-  status: "active" | "ending_soon" | "closed";
-  userBidStatus: "none" | "leading" | "outbid" | "won" | "lost";
-  leaderboard: { userId: string; amount: number; placedAt: string }[];
-  wsStatus: "connecting" | "open" | "reconnecting" | "closed";
-};
-```
+### 1. Product Listing Performance
+
+- Use **FlashList** for large product grids.
+- Pass `productIds` to the list instead of full product objects.
+- Each `ProductCard` selects `productsById[id]` from store.
+- Provide image `width` and `height` to calculate `aspectRatio` before image loads.
+- Prefetch next-page images after current page settles.
+- Use stable keys: `product.id`, not index.
+
+### 2. Cursor Pagination
+
+Use cursor pagination for product listings.
+
+- Product catalogs are live: products, prices, and rankings can change.
+- Offset pagination can cause duplicates or missing items when data shifts.
+- Cursor should be opaque to the client.
+- For sorted data, backend can encode composite sort values, for example `(price, id)`.
+
+Offset pagination is acceptable for small, stable personal lists such as order history.
+
+### 3. Cache Strategy
+
+- **Frontend cache:** Zustand in-memory normalized store.
+- **Local read-only cache:** MMKV for recently viewed and small home snapshot.
+- **Backend cache good to have:** Redis or edge cache for popular catalog/home queries.
+- **Browser HTTP cache:** Not core for React Native, but CDN caching helps images and public catalog data.
+- **Eviction:** Listing/widget slices use `expiresAt`; product entities can be removed when no active slice references them.
+
+### 4. Cart Correctness
+
+- Server is source of truth.
+- Client can optimistically update cart badge/UI.
+- Server response always reconciles local state.
+- Validate cart before checkout.
+- Handle multi-device sync by refetching cart on app foreground.
+- Silent push can be used as a fast path for `cart_updated`.
+
+### 5. Auth + Guest Session
+
+- Store access/refresh tokens in Keychain/Keystore.
+- Store guest session token in MMKV.
+- Send `X-Session-Token` for guest cart requests.
+- On login, backend merges guest cart into account cart.
+- Client deletes guest token after successful merge.
+
+### 6. Offline Behavior
+
+- Allow read-only recently viewed products from MMKV.
+- Show cached home snapshot if network is unavailable.
+- Disable checkout and cart mutations offline.
+- Wishlist can be optimistic locally, but must reconcile with server later.
+
+### 7. Server-Driven Home
+
+- Amazon/Flipkart-style home pages are feeds of heterogeneous widgets, not a single static page.
+- `/home/manifest` returns ordered widget descriptors: type, priority, data URL, display config, and live-update flag.
+- Above-fold widgets fetch immediately so first screen appears fast.
+- Below-fold widgets fetch on viewport entry to avoid blocking first render.
+- Product widgets store product IDs and reuse `productsById`.
+- Personalization widgets include Buy Again, recommended for you, recently viewed, trending, best-sellers, deals, sponsored rows, and category strips.
+- Live banners and flash-sale widgets can use SSE with polling fallback.
+- Unknown widget types should render a safe fallback instead of crashing the home screen.
+
+### 8. Flash Sale / Live Deals
+
+- Treat flash sale as a first-class feature, not a normal product listing.
+- Show deal price, countdown, claimed percentage, low-stock/sold-out status, and max quantity.
+- Use SSE for live one-way updates such as claimed percentage and stock status.
+- Use polling fallback every 15-30 seconds if SSE is unavailable.
+- Do not trust local inventory during add-to-cart or checkout; server validates and reserves.
+- For very high-traffic drops, backend should use Redis/token bucket/queue based admission to avoid overselling and protect inventory writes.
+- Client should handle `SOLD_OUT`, `DEAL_EXPIRED`, `WAITLISTED`, and `RATE_LIMITED` states gracefully.
+
+### 9. Auctions / Bidding
+
+- Use WebSocket only while auction product detail screen is open.
+- Bid placement should not be optimistic.
+- Server confirms accepted/outbid status.
+- On `closed` event, winner proceeds to checkout at locked price.
 
 ---
 
-### MMKV keys
+## Summary
 
-| Key                        | Value                                                                                                       |
-| -------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| `guest_session_token`      | UUID generated on first launch; sent as `X-Session-Token` to scope server-side guest cart; deleted on login |
-| `pending_payment_order_id` | Order ID saved just before the payment sheet — used to recover navigation if app crashes mid-payment        |
-| `wishlist_ids`             | JSON set of product IDs                                                                                     |
-| `recently_viewed`          | JSON array of up to 30 product IDs, newest first                                                            |
-| `home_cache`               | JSON snapshot of banners + featured products                                                                |
-| `home_last_synced`         | Unix ms — TTL check on open                                                                                 |
-| `guest_wishlist`           | JSON set of product IDs for unauthenticated session                                                         |
+Use a normalized store for products, cursor pagination for listings, server-maintained cart for correctness, Keychain/Keystore for auth tokens, MMKV only for safe local state, and FlashList/image sizing for smooth React Native performance.
 
----
+### Cheat Sheet
 
-## 4. API (I)
+- **Flow:** Home/listing/PDP UI -> controller -> Zustand store -> network -> store -> UI.
+- **Product data:** `productsById` is global; lists/widgets/wishlist store only IDs.
+- **Listing pagination:** Cursor-based, keyed by category/filter/sort/search.
+- **Cart:** Server-maintained; optimistic UI allowed, server response wins.
+- **Guest cart:** Server scoped by `guest_session_token` stored in MMKV.
+- **Auth tokens:** Keychain/Keystore, never AsyncStorage/MMKV.
+- **Images:** Store width/height, use aspect ratio, prefetch next page.
+- **Home:** Server-driven manifest with above-fold eager fetch and below-fold lazy fetch.
+- **Widgets:** Support personalized Buy Again, recommendations, deals, sponsored rows, and category strips.
+- **Flash sale:** SSE for live deal state, server validates reservation/checkout, queue/token gate for major drops.
+- **Offline:** Recently viewed/home snapshot only; cart/checkout require server.
+- **Bidding:** WebSocket for auctions; bid placement is server-confirmed, not optimistic.
 
-```
-# Auth
-POST /auth/login              { email }                 → { message: "OTP sent" }
-POST /auth/otp/verify         { email, otp }            → { accessToken, refreshToken, user }
-POST /auth/oauth              { provider, idToken }     → { accessToken, refreshToken, user }
-POST /auth/refresh            { refreshToken }          → { accessToken }
-POST /auth/logout             {}                        → 200
-POST /auth/login              { ...credentials, guestSessionToken? }
-                              → if guestSessionToken provided, server merges guest cart into account cart
+### Extras: Native Storage Choices
 
-# Products
-GET  /products?category=cat_shoes&sort=price_asc&minPrice=50&maxPrice=200&cursor=<c>&limit=20
-       → { products[], nextCursor, total }
-
-GET  /products/:id                            → full product with all variants + reviews summary
-GET  /products?ids=id1,id2,id3               → { products[] } — batch fetch for recently viewed
-GET  /categories                              → { categories[] } — cached, rarely changes
-
-# Home (server-driven)
-GET  /home/manifest                           → { widgets[] }  — ordered widget descriptors
-GET  /home/widgets/:widgetId?cursor=&limit=   → { items[], nextCursor, hasMore, ttlMs }
-GET  /home/banners/live                       → SSE stream — banner_updated events
-                                              — event: { widgetId, banners[], expiresAt }
-
-# Cart  (server is source of truth; X-Session-Token scopes guest carts)
-GET  /cart                                              → { items[], totalAmount }
-POST /cart/items        { productId, variantId, qty }   → { items[] }  — also sends silent cart_updated push to other sessions
-PATCH /cart/items/:id   { qty }                         → { items[] }  — also sends silent cart_updated push to other sessions
-DELETE /cart/items/:id                                  → { items[] }  — also sends silent cart_updated push to other sessions
-POST /cart/validate                                     → { valid, issues: [{ productId, issue }] }
-                                                           (no payload — server reads its own cart; validates stock, limits, prices)
-
-# Wishlist
-POST /wishlist/:productId   → { wishlisted: true }
-DELETE /wishlist/:productId → { wishlisted: false }
-
-# Orders
-POST /orders            { cartId, addressId, shippingMethodId, paymentMethodId }
-       → { orderId, estimatedDelivery }
-
-GET  /orders            → { orders[] }           — order history
-GET  /orders/:id        → { order, trackingUrl } — order detail
-
-# Auctions
-GET  /auctions/:id                            → { auction, product }
-POST /auctions/:id/bids  { amount }           → { bid, status: 'accepted' | 'outbid', currentBid, minNextBid }
-GET  /auctions/:id/bids                       → { bids[], leaderboard[] }
-WS   /auctions/:id/stream                     → real-time events:
-                                                  new_bid: { currentBid, totalBids, minNextBid }
-                                                  outbid:  { yourBid, currentBid }
-                                                  ending_soon: { secondsLeft }
-                                                  closed:  { winnerId, finalPrice, status }
-```
+- **MMKV:** Fast key-value storage for non-sensitive app data such as guest session token, recently viewed IDs, home snapshot, and guest wishlist.
+- **Keychain/Keystore:** Encrypted OS storage for access token and refresh token.
+- **AsyncStorage:** Avoid for tokens; acceptable only for low-value non-sensitive preferences if MMKV is not available.
 
 ---
 
-## 5. Deep Dives (O)
-
-### Why Cursor Pagination — Not Offset
-
-Product listings look tempting for offset (`?page=3&pageSize=20`) because it supports jump-to-page. But offset has two critical failure modes in a live catalog:
-
-|                                 | Cursor                                            | Offset                                                                              |
-| ------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| **Consistency while scrolling** | Stable — new products added don't shift pages     | Drifts — a new product on page 1 pushes everything down by 1 → user sees duplicates |
-| **DB performance**              | `WHERE id < :cursor LIMIT 20` → single index seek | `OFFSET 200 LIMIT 20` → DB scans 220 rows, discards 200                             |
-| **Deep scroll**                 | O(1) always                                       | Gets slow past page 50+ on large catalogs                                           |
-| **Filter + sort combo**         | Cursor encodes sort key + id → stable             | Breaks badly when sort key isn't unique                                             |
-| **Jump-to-page**                | Not possible                                      | Easy, but rarely needed in mobile browse                                            |
-
-Use offset only for admin dashboards where jump-to-page 50 matters. For all consumer-facing mobile lists: cursor.
-
-**Cursor implementation detail:** For price-sorted results the cursor is a composite `(price, id)` not just `id`, because price isn't unique:
-
-```
-Server: WHERE (price, id) > (:cursorPrice, :cursorId) ORDER BY price ASC, id ASC LIMIT 20
-```
-
-The server encodes this as an opaque base64 string — the client never needs to understand it.
-
-**Exception — when offset is the right choice:**
-
-Order history is the one place where offset (or time-bucketing) beats cursor:
-
-|                                 | Product listing       | Order history                       |
-| ------------------------------- | --------------------- | ----------------------------------- |
-| **New items added mid-list?**   | Yes — catalog is live | No — new orders prepend at top only |
-| **Items deleted or reordered?** | Possible              | Never                               |
-| **Dataset size per user**       | Millions of products  | Tens to low-hundreds                |
-| **User scrolls past page 3?**   | Common                | Rare                                |
-| **Drift / duplicate risk**      | High                  | Negligible                          |
-
-Amazon groups orders by year (`WHERE placed_at BETWEEN year_start AND year_end`) — no mid-list pagination needed within a year for most users. Apps that show a continuous "Load more" list can use offset, cursor, or a time-range query interchangeably here — all three work because the data is stable.
-
-**Rule of thumb:** Cursor for large, live, frequently-mutated-mid-list data (product catalog, search results, feeds). Offset or time-bucketing for append-only, stable, small personal lists (orders, transactions, notifications).
-
----
-
-### Normalized Store — allIds + byId
-
-Storing products as an array means patching one product's stock status recreates the whole array → every `ProductCard` in the list re-renders.
-
-Storing products as an array means one price update recreates the whole array and re-renders every card. With `byId`, `patchProduct(id, patch)` writes a new reference only for that product — all other cards stay stable. FlashList receives only `allIds`; each `ProductCard` subscribes to `useProductStore(s => s.byId[productId])` so only that one card re-renders.
-
-**Multiple listing screens share the same `byId` map.** The "Shoes" listing, the search results listing, and the wishlist listing all write into one shared `byId`. No duplication, and a wishlist toggle on one screen is instantly reflected everywhere.
-
----
-
-### FlashList — 60 fps Product Grid
-
-Use **FlashList** (Shopify) over FlatList. Key props for a 2-column product grid:
-
-- `data={allIds}` — only IDs, so a stock-status change on one product doesn't re-render the list.
-- `getItemType` returning `'product'` or `'sponsored'` — FlashList recycles views by type, eliminating layout thrash.
-- `estimatedItemSize={260}` — measure with `onLayout` in dev and hardcode; wrong value causes scroll jumps.
-- `onEndReachedThreshold={0.4}` — prefetch next page when 40% from bottom.
-- `viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}` — only count a card as viewed when half on screen.
-
-**FlashList v2 (2025):** Self-corrects `estimatedItemSize` after first render; `getItemType` not needed for uniform lists. Drop-in upgrade.
-
----
-
-### Cursor Load-Next-Page — No Duplicates
-
-```
-loadNextPage (per query key):
-  queryKey = buildKey(category, sort, filters)  // "cat_shoes|price_asc|50-200"
-  pagination = store.paginationByQuery[queryKey]
-  if !pagination.hasMore || pagination.isFetching → return
-
-  mark isFetching = true
-  fetch GET /products?...&cursor=pagination.nextCursor&limit=20
-
-  existingSet = new Set(store.allIds)            // O(1) dedup guard
-  fresh = products.filter(p => !existingSet.has(p.id))
-
-  merge fresh products into byId
-  append fresh IDs to allIds
-  save nextCursor; if products.length < 20 → hasMore = false
-  mark isFetching = false
-```
-
-The dedup guard matters: at a high-traffic catalog, a product added between page 1 and page 2 can appear on both pages. Filter-before-append prevents the duplicate card from ever rendering.
-
----
-
-### Filter + Sort = New Query Key, Reset Pagination
-
-Applying a filter or changing sort order is a new query — not a continuation of the previous one. On filter change: clear `allIds` and reset the cursor for the new `queryKey`, then fetch the first page. Products already in `byId` from a prior query stay in place — if they reappear in the new result, the dedup guard skips the network fetch and uses the cached object.
-
----
-
-### Cart — Server-Maintained with Optimistic UI
-
-The cart lives on the server. `CartStore` (Zustand) is purely a client-side mirror — it is never the source of truth, only a snapshot for rendering. Prices, stock, and `maxQuantity` always come from the server response.
-
-**Mutations — optimistic then reconcile:**
-
-```
-addToCart(productId, variantId, qty):
-  snapshot = CartStore.applyOptimistic({ productId, variantId, qty, op: 'add' })
-  try:
-    { items } = POST /cart/items { productId, variantId, qty }
-    CartStore.set(items)         // server response overwrites — price/qty may differ
-  catch:
-    CartStore.revert(snapshot)
-    Toast.show("Couldn't add to cart")
-
-updateQty(productId, qty):
-  snapshot = CartStore.applyOptimistic({ productId, qty, op: 'update' })
-  try:
-    { items } = PATCH /cart/items/:productId { qty }
-    CartStore.set(items)
-  catch 404:
-    // Item removed by another device — don't revert, just refresh
-    { items } = GET /cart
-    CartStore.set(items)
-```
-
-Cart badge reads `CartStore.totalQty` — updates instantly without an API round-trip.
-
-**Rapid tapping / concurrent mutations:** Debounce quantity changes by 300 ms so only one `PATCH` fires per burst. The final server response always overwrites intermediate optimistic state.
-
-**Guest session token:** Generated once on first launch, stored in MMKV, sent as `X-Session-Token` on every request. The server scopes the cart to this token. On login, pass the token to `POST /auth/login`; the server merges the guest cart into the account cart additively (quantities summed, capped at `maxQuantity`). Client deletes the token from MMKV — auth token takes over.
-
-**Cart on app open:** `GET /cart` is called on every app launch and on every `AppState` transition to `active`. This is the primary sync mechanism — no local cart to hydrate, no async gap.
-
----
-
-### Cart Multi-Device Sync
-
-Because the cart lives on the server, two devices on the same account always see the same cart. Keeping them in sync uses two mechanisms:
-
-**Foreground refetch (primary):** On `AppState change → active`, call `GET /cart` and set `CartStore`. Covers the common case: user adds something on phone, opens tablet — tablet's first foreground event refreshes the cart.
-
-**Silent push (fast path):** After any cart mutation, the server sends a `cart_updated` silent push to all other active sessions of the same user. The receiving device calls `GET /cart` immediately. Push can be missed (backgrounded, network gap) — the foreground refetch is the reliable safety net.
-
-**Conflict resolution — server wins:** There is no merge on the client. If device A removes an item while device B is about to increment it, device B's `PATCH` returns 404; the catch block calls `GET /cart` and reconciles from the authoritative response. No special conflict logic needed.
-
-**Cart cleared at order creation:** `POST /orders` atomically reads the server cart, creates the order, and clears the cart in one DB transaction. A double-tap or retry finds an empty cart and returns `CART_EMPTY` — no duplicate order, no duplicate charge. Client-side idempotency keys are not needed.
-
----
-
-### Inventory Validation Before Checkout
-
-Stock shown on the product card is a cached snapshot. Before entering payment, validate with the server:
-
-```
-tap "Proceed to Checkout":
-  GET /cart/validate
-  if outOfStockIds.length > 0:
-    flag those rows in CartStore (show "Out of Stock" badge)
-    block "Proceed" button
-    show banner "Some items are no longer available"
-  else:
-    navigate to Address screen
-```
-
-This single pre-checkout call prevents the worst UX failure in e-commerce: a user who fills out payment details only to discover an item went out of stock.
-
-**Price-change handling:** If `cart/validate` returns a different price than `priceAtAdd`, show "Price updated" inline on that row and re-calculate the subtotal. Don't block checkout — price changes are common and expected.
-
----
-
-### Product Images — Zero Layout Shift
-
-Every image carries `width` and `height`. The client sets `aspectRatio: image.width / image.height` on the `FastImage` style before the first byte arrives — no layout shift, and FlashList can compute card heights for recycling. When `onEndReached` fires, call `FastImage.preload(nextPageUrls)` in parallel with the next-page API call so images and data arrive together.
-
----
-
-### Recently Viewed — Instant Product Detail Open
-
-When a user taps a product:
-
-1. If `byId[id]` exists → render immediately, no spinner.
-2. If not → show skeleton, fetch `GET /products/:id`, merge into `byId`.
-
-On every product open, prepend the ID to a MMKV `recently_viewed` array (dedup + cap at 30). On the home screen, "Recently Viewed" reads those IDs: products already in `byId` render instantly; missing ones are fetched in one batch (`GET /products?ids=...`).
-
----
-
-### Checkout State Machine
-
-Checkout is a multi-step flow with back-navigation, validation at each step, and a single terminal success state. Model it explicitly:
-
-```
-STATES: idle → validating_cart → address → shipping → payment → placing_order → confirmed | failed
-
-TRANSITIONS:
-  idle → validating_cart  : tap "Proceed"
-  validating_cart → address : cart valid
-  validating_cart → idle   : out-of-stock items found
-  address → shipping       : address saved/selected
-  shipping → payment       : shipping method selected
-  payment → placing_order  : tap "Place Order"
-  placing_order → confirmed : POST /orders success
-  placing_order → failed    : POST /orders error (show retry)
-  confirmed → idle          : tap "Continue Shopping" → clear cart
-```
-
-State machine prevents double-submits (`placing_order` state disables the button), handles the back-press correctly (address → shipping is reversible; confirmed → payment is not), and makes the checkout flow unit-testable.
-
----
-
-### Wishlist — Optimistic Toggle
-
-Same optimistic pattern as cart: toggle in `WishlistStore` + MMKV immediately, then call `POST/DELETE /wishlist/:productId`. On failure, revert the store + MMKV + toast. Heart icon re-renders only on `WishlistStore.has(productId)` — not on cart or product store updates.
-
----
-
-### Home Screen — Stale-While-Revalidate
-
-```
-initHome:
-  raw = MMKV.getString('home_cache')
-  if raw → render immediately (no spinner)
-
-  lastSynced = MMKV.getNumber('home_last_synced') ?? 0
-  if (Date.now() - lastSynced > 10 * 60 * 1000):  // 10 min TTL
-    fetch GET /home in background
-    on success: update store + MMKV + home_last_synced
-```
-
-Home content (banners, featured) changes infrequently. 10-minute TTL means the user never waits for banners to load, and data is fresh enough.
-
----
-
-### Impression Tracking (for Personalization)
-
-Batch product view events — never one network call per card scroll:
-
-```
-onViewableItemsChanged → push visible productIds into buffer
-debounce 3s → POST /events/impressions { productIds[], sessionId, screen: 'listing' }
-AppState → background → flush immediately
-```
-
-`viewabilityConfig: { itemVisiblePercentThreshold: 50 }` — only count a product as viewed when 50% is on screen. Used server-side to improve recommendation ranking.
-
----
-
-### Auth — Guest Session and Login Migration
-
-The app always has a session — either `guest` or `user`. This allows full browse without login while cleanly migrating state on sign-in.
-
-**Token storage:** Use `react-native-keychain` (`Keychain.setGenericPassword`), not MMKV or AsyncStorage. Both MMKV and AsyncStorage are readable by any process with the app's UID on a rooted device; Keychain uses the hardware-backed secure enclave.
-
-**Token refresh:** Attach an Axios response interceptor that catches 401 → reads the refresh token from Keychain → calls `POST /auth/refresh` → retries the original request. On refresh failure, clear tokens and route to login.
-
-**Guest → auth migration on login:**
-
-```
-1. POST /auth/login { ...credentials, guestSessionToken }
-   → server merges guest server-cart into account cart; returns merged cart + tokens
-2. Store accessToken + refreshToken in Keychain
-3. CartStore.set(mergedCart)
-4. MMKV.delete('guest_session_token')  — server owns merged cart now
-5. Read guest_wishlist from MMKV; POST /wishlist/:id for each; MMKV.delete('guest_wishlist')
-```
-
-**Auth gate:** Protected actions (cart, checkout, wishlist) check `AuthStore.role`. If `"guest"`, show a bottom-sheet login prompt. After login the original action is replayed — user never loses their intent.
-
----
-
-### Home Screen — Server-Driven Widget Feed (30+ Widgets)
-
-Fetching all 30+ widgets in one request blocks the screen. Fetching them all in parallel on mount floods the network. The solution: one manifest call that returns metadata, then per-widget data fetches gated by viewport entry.
-
-**Priority tiers:**
-
-| Tier         | Fetch trigger                                                  | Count |
-| ------------ | -------------------------------------------------------------- | ----- |
-| `above_fold` | On manifest load — parallel fetch all                          | ≤ 5   |
-| `below_fold` | Widget `View` enters viewport (via `onLayout` + scroll offset) | Rest  |
-
-**Widget registry (type → component):**
-
-```typescript
-const WIDGET_REGISTRY: Record<string, React.ComponentType<{ widgetId: string }>> = {
-  hero_banner:          HeroBannerWidget,
-  category_strip:       CategoryStripWidget,
-  product_carousel:     ProductCarouselWidget,
-  flash_sale_countdown: FlashSaleWidget,
-  order_history_strip:  OrderHistoryWidget,
-  referral_banner:      ReferralBannerWidget,
-  sponsored_row:        SponsoredRowWidget,
-};
-
-function HomeWidget({ widget }: { widget: WidgetManifestEntry }) {
-  const Component = WIDGET_REGISTRY[widget.type];
-  return Component ? <Component widgetId={widget.widgetId} /> : null;
-}
-```
-
-New widget types deploy without a client release — the registry lookup returns `null` and the unknown widget is silently skipped.
-
-**Render flow:** `HomeScreen` fetches `/home/manifest`, immediately fires `WidgetDataStore.fetch()` for all `above_fold` widgets in parallel, then renders a `FlashList` of `LazyWidget` wrappers. Each `LazyWidget` starts as a type-matched skeleton; when it enters the viewport (`InViewport` callback), it triggers its own data fetch and swaps the skeleton for the real widget. Skeletons are sized to match the widget type so there is no layout jump.
-
----
-
-### Per-Widget Pagination
-
-Every widget that returns a list owns its own cursor in `WidgetDataStore` keyed by `widgetId`. On `onEndReached`:
-
-```
-loadMoreWidget(widgetId):
-  if !hasMore || status === 'loading' → return
-  fetch dataUrl?cursor=nextCursor&limit=20
-  merge new products into shared byId (dedup via Set)
-  append IDs to WidgetDataStore[widgetId].itemIds
-  save nextCursor; if items < 20 → hasMore = false
-```
-
-Scrolling a recommendations carousel to the end does not trigger the flash-sale widget — each cursor is fully isolated.
-
----
-
-### Live Banners — SSE vs Polling
-
-Hero banners are the highest-value real-estate on the home screen. Flash sales, limited-time offers, and emergency notices need to appear within seconds without the user having to pull-to-refresh.
-
-**Why SSE over WebSocket for banners:**
-
-- Banners are server → client only; no client → server messages needed.
-- SSE is HTTP/2 multiplexed — no extra connection; works through most corporate proxies.
-- Automatic reconnect is built into the `EventSource` API.
-
-**BannerSSEClient:** Opens `EventSource` to `/home/banners/live`. On `banner_updated` event, patches `WidgetDataStore` with the new banner list in-place. On error, closes and reconnects with exponential backoff (1 s → 2 s → … → 60 s cap). After 3 failed reconnects, falls back to a `setInterval` 30 s poll against `/home/widgets/wgt_hero_banner`. Poll is paused when `AppState` goes to background and resumed on foreground.
-
-**Expiry-based local invalidation:** The SSE event carries `expiresAt`. Client schedules a `setTimeout` at that timestamp so flash-sale banners disappear exactly on schedule even if the SSE connection is idle.
-
----
-
-### Bidding — Real-Time Auction with WebSocket
-
-Bids are not optimistic. A user placing ₹260 must receive server confirmation before seeing "You're leading" — showing a false lead state that reverts on the next WS push is worse UX than a 200 ms spinner.
-
-**AuctionSocketManager:** Singleton map of `auctionId → WebSocket`. `open(auctionId)` is called on screen mount (skips if already connected); `close(auctionId)` on unmount. On each WS message:
-
-| Event type    | Action                                                       |
-| ------------- | ------------------------------------------------------------ |
-| `new_bid`     | Patch `currentBid`, `minNextBid`, `totalBids` in BidStore    |
-| `outbid`      | Set `userBidStatus = 'outbid'`; fire local push notification |
-| `ending_soon` | Set `status = 'ending_soon'` (UI turns countdown red)        |
-| `closed`      | Set `status = 'closed'`, resolve `won`/`lost`; close socket  |
-
-On `ws.onclose`, reconnect after 2 s if auction `status` is still `active`.
-
-**Placing a bid (server-confirmed, not optimistic):**
-
-```
-disable bid button → POST /auctions/:id/bids { amount }
-  if accepted  → BidStore: userBidStatus = 'leading', update currentBid
-  if outbid    → BidStore: userBidStatus = 'outbid', toast with minNextBid
-  if error     → toast "Couldn't place bid"
-re-enable bid button
-```
-
-**Countdown timer:** `setInterval` ticking every 1 s, seeded from `endsAt - Date.now()`. Timer lives in the component; no server polling needed — WS `closed` event is the authoritative end signal.
-
-**Why not optimistic bids?** Two users bidding simultaneously at the minimum both get "You're leading" → one reverts → user sees a flash of false state. The 200 ms wait for server confirmation is always the better UX.
-
-**Auction won → checkout:** Server locks the final price. The checkout flow starts with a pre-filled cart containing `{ productId, lockedPrice: finalBid, auctionId }`. `/cart/validate` skips stock check for auction items (the item is reserved for the winner) but still validates that the lock hasn't expired (locks expire after 10 minutes).
-
----
-
-### Recommendation Widget — Cold Start and Personalization
-
-Same `/home/widgets/:widgetId` endpoint for all users. Authenticated users get collaborative-filtering results ranked on purchase + browse history. Guests (cold start) get top-selling or trending products for their detected locale — no empty state.
-
-The cursor encodes the model snapshot version, so scrolling page 2 returns results from the same ranked list the user started with — a new product can't insert itself mid-scroll. Impression events (50%+ visible, 3 s+) are batched and sent to `/events/impressions`; the ranking model refreshes every 30 minutes and the next manifest fetch reflects it.
-
----
-
-## 6. Libraries
-
-| Library                            | Use                                                                                            |
-| ---------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **FlashList (Shopify)**            | 60 fps product grid; recycles views by card type                                               |
-| **FastImage**                      | Image caching, priority loading, background decode                                             |
-| **Zustand**                        | ProductStore, CartStore, WishlistStore — selector subscriptions prevent over-render            |
-| **MMKV**                           | Cart + wishlist persistence; synchronous reads; 10× faster than AsyncStorage                   |
-| **TanStack Query**                 | Orders history, categories — server state with stale-while-revalidate built in                 |
-| **React Navigation**               | Stack navigator for product detail; tab navigator for main app                                 |
-| **Stripe React Native**            | Payment sheet — handles PCI compliance, 3DS, Apple/Google Pay                                  |
-| **NetInfo**                        | Online/offline detection — show "offline" banner and disable cart mutations when no connection |
-| **Lodash debounce**                | Filter input debounce — avoid firing a new query on every slider tick                          |
-| **react-native-keychain**          | Keychain/Keystore storage for access + refresh tokens; hardware-backed on modern devices       |
-| **react-native-push-notification** | Local push for outbid events; remote push for order updates                                    |
-| **EventSource (rn-eventsource)**   | SSE client for live banner feed; auto-reconnect with exponential backoff                       |
-| **react-native-gesture-handler**   | Smooth bid-amount slider and swipe-to-dismiss modals in auction screen                         |
+## References
+
+- Amazon homepage personalization and widget-style shopping feed: [Amazon enhanced homepage features](https://www.aboutamazon.com/news/retail/amazon-homepage-redesign-features)
+- Amazon time-limited/limited-quantity deals: [Amazon Lightning Deals](https://www.aboutamazon.com/news/retail/how-to-find-amazon-lightning-deals/)
+- Flipkart mobile/app-like performance and offline/re-engagement case study: [Flipkart Lite case study](https://web.dev/flipkart/)
+- Flash-sale traffic and oversell prevention patterns: [Flash sale system design](https://www.techinterview.org/post/3233465613/system-design-flash-sale/)
+- Real-time inventory updates using WebSocket pattern: [WebSocket e-commerce flash sale case study](https://clickpatrol.com/knowledge-base/what-is-websocket/)
+- FlashList for React Native lists
+- React Navigation deep linking and navigation state
+- MMKV for React Native storage
+- iOS Keychain and Android Keystore for secure token storage
+- Cursor pagination for live catalog/feed data
