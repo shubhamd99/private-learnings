@@ -1,6 +1,7 @@
 // Extends
 // Class inheritance (Child gets Parent's code).
 // "I am a type of Animal, so I automatically have legs."
+// extends exists in both JavaScript and TypeScript.
 
 // Implements
 // Contract enforcement (No code shared, only rules).
@@ -72,3 +73,33 @@ class AddNumber implements Addition<number> {
 
 let myNumberAdditon: AddNumber = new AddNumber();
 myNumberAdditon.add(2, 3); // 5
+
+class Animal2 {
+  private legs: any;
+
+  constructor(legs: any) {
+    this.legs = legs;
+  }
+
+  walk() {
+    console.log(`Walking with ${this.legs} legs`);
+  }
+}
+
+class Dog extends Animal2 {
+  private breed: any;
+
+  constructor(breed: any) {
+    super(4);
+    this.breed = breed;
+  }
+
+  bark() {
+    console.log("Woof Woof");
+  }
+}
+
+const dog = new Dog("Golden Retriever");
+
+dog.walk();
+dog.bark();
