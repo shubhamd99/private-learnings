@@ -40,3 +40,27 @@ debouncedSearch("abc"); // timer resets
 // Debounce:  ____________________call  ← waits for pause
 
 // Throttle:  call____call____call____  ← fires at intervals
+
+// Returned function is a normal function
+// this is dynamic
+// It correctly takes caller object context
+
+const obj = {
+  name: "Shubham",
+  say: debounce(function () {
+    console.log(this.name);
+  }, 500),
+};
+
+obj.say(); // Shubham
+
+// Because normal function gets this = obj.
+
+// If you change return function to arrow:
+// return (...args) => {
+//  then arrow function does NOT have its own this.
+// It captures lexical this from parent scope.
+
+// In browser global scope:
+// this may become window
+// In modules/strict mode it can become undefined

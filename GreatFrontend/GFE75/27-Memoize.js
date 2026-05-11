@@ -42,6 +42,7 @@ function memoize2(func) {
     }
 
     const result = func.call(this, ...args);
+    // const result = func.apply(this, args);
     cache.set(key, result);
 
     return result;
