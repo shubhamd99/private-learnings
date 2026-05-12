@@ -95,6 +95,7 @@
 | 7   | Longest Palindromic Substring (expand around center) | 5     | Medium     |
 | 8   | Is Subsequence                                       | 392   | Easy       |
 | 9   | Find the Index of the First Occurrence in a String   | 28    | Easy       |
+| 10  | Reverse Vowels of a String                           | 345   | Easy       |
 
 ### DAY 2 — Three Pointers (Dutch National Flag)
 
@@ -532,7 +533,7 @@
 | -------------- | ----- |
 | Total Days     | 36    |
 | Total Patterns | 44    |
-| Total Problems | 189   |
-| **Easy**       | 42    |
+| Total Problems | 190   |
+| **Easy**       | 43    |
 | **Medium**     | 110   |
 | **Hard**       | 37    |
