@@ -1,5 +1,7 @@
 # DSA Patterns Cheat Sheet
 
+[Algorithm Visualizer](https://staying.fun/en/features/algorithm-visualize)
+
 | #   | Pattern                              | When to Apply                                                   | Key Clue in Problem                                                           |
 | --- | ------------------------------------ | --------------------------------------------------------------- | ----------------------------------------------------------------------------- |
 | 1   | Two Pointers                         | Sorted array, find pair or triplet, remove duplicates           | "sorted", "pair sum", "palindrome", "remove duplicates in place"              |
