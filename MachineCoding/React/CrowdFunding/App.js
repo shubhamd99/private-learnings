@@ -1,6 +1,6 @@
 import React, { useState } from "react";
-import CampaignCard from "./CampaignCard";
-import { INITIAL_CAMPAIGNS } from "./data";
+import CampaignCard from "./components/CampaignCard";
+import { INITIAL_CAMPAIGNS } from "./constants/data";
 import "./App.css";
 
 function App() {
