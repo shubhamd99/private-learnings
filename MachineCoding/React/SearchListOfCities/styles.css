@@ -1,0 +1,24 @@
+.app {
+  max-width: 400px;
+  margin: 40px auto;
+  font-family: sans-serif;
+}
+
+.search-input {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 16px;
+}
+
+.city-list {
+  padding-left: 20px;
+}
+
+li {
+  margin-bottom: 8px;
+}
+
+mark {
+  background: yellow;
+  font-weight: bold;
+}
