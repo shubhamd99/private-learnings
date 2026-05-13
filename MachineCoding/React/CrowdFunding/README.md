@@ -4,6 +4,8 @@ A minimal crowdfunding app built with React + TypeScript + Vite.
 
 ![Preview](preview/01.png)
 
+**Test it in:** [CodeSandbox](https://codesandbox.io/dashboard/recent)
+
 ## Features
 
 - Multiple campaigns displayed in a responsive grid
