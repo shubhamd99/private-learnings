@@ -2,8 +2,8 @@
 
 A simple and reusable Bottom Sheet component for React Native.
 
-<p align="center">
-  <img src="preview/01.png" width="280" alt="Bottom sheet open" />
+<p>
+  <img src="preview/01.png" width="800" alt="Bottom sheet open" />
 </p>
 
 ## Features
