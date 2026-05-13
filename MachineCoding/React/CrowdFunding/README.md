@@ -1,6 +1,6 @@
 # CrowdFunding
 
-A minimal crowdfunding app built with React + TypeScript + Vite.
+A minimal crowdfunding app built with React + JavaScript + Vite.
 
 ![Preview](preview/01.png)
 
@@ -17,7 +17,7 @@ A minimal crowdfunding app built with React + TypeScript + Vite.
 ## Stack
 
 - React 19
-- TypeScript
+- JavaScript
 - Vite
 
 ## Getting Started

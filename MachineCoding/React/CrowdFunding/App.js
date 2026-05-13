@@ -1,35 +1,16 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import CampaignCard from "./CampaignCard";
 import { INITIAL_CAMPAIGNS } from "./data";
 import "./App.css";
 
-export type Contributor = {
-  id: number;
-  name: string;
-  amount: number;
-};
-
-export type Campaign = {
-  id: number;
-  title: string;
-  description: string;
-  goal: number;
-  raised: number;
-  contributors: Contributor[];
-};
-
 function App() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>(INITIAL_CAMPAIGNS);
+  const [campaigns, setCampaigns] = useState(INITIAL_CAMPAIGNS);
 
-  const handleContribute = (
-    campaignId: number,
-    name: string,
-    amount: number,
-  ) => {
+  const handleContribute = (campaignId, name, amount) => {
     setCampaigns((prev) =>
       prev.map((c) => {
         if (c.id !== campaignId) return c;
-        const newContributor: Contributor = { id: Date.now(), name, amount };
+        const newContributor = { id: Date.now(), name, amount };
         return {
           ...c,
           raised: Math.min(c.raised + amount, c.goal),
@@ -39,7 +20,7 @@ function App() {
     );
   };
 
-  const handleWithdraw = (campaignId: number, contributorId: number) => {
+  const handleWithdraw = (campaignId, contributorId) => {
     setCampaigns((prev) =>
       prev.map((c) => {
         if (c.id !== campaignId) return c;

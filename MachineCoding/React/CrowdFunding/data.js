@@ -1,6 +1,4 @@
-import type { Campaign } from "./App";
-
-export const INITIAL_CAMPAIGNS: Campaign[] = [
+export const INITIAL_CAMPAIGNS = [
   {
     id: 1,
     title: "Solar Panels for Community Center",
@@ -23,17 +21,6 @@ export const INITIAL_CAMPAIGNS: Campaign[] = [
     contributors: [
       { id: 3, name: "Carol", amount: 700 },
       { id: 4, name: "David", amount: 500 },
-    ],
-  },
-  {
-    id: 3,
-    title: "Local Animal Shelter Renovation",
-    description: "Renovate the shelter to give animals a safer, better home.",
-    goal: 8000,
-    raised: 7800,
-    contributors: [
-      { id: 5, name: "Eve", amount: 4000 },
-      { id: 6, name: "Frank", amount: 3800 },
     ],
   },
 ];

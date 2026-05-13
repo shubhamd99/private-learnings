@@ -1,13 +1,6 @@
-import { useState } from "react";
-import type { Campaign } from "./App";
+import React, { useState } from "react";
 
-type Props = {
-  campaign: Campaign;
-  onContribute: (campaignId: number, name: string, amount: number) => void;
-  onWithdraw: (campaignId: number, contributorId: number) => void;
-};
-
-function CampaignCard({ campaign, onContribute, onWithdraw }: Props) {
+function CampaignCard({ campaign, onContribute, onWithdraw }) {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [error, setError] = useState("");
@@ -17,7 +10,7 @@ function CampaignCard({ campaign, onContribute, onWithdraw }: Props) {
   const remaining = goal - raised;
   const isFunded = raised >= goal;
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
     const amt = Number(amount);
     if (!name.trim()) return setError("Name is required.");
