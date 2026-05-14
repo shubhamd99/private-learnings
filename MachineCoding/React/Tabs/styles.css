@@ -1,0 +1,53 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f7f7f7;
+  color: #222;
+}
+
+.page {
+  max-width: 640px;
+  margin: 40px auto;
+  padding: 0 16px;
+}
+
+.tabs {
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.tab-list {
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid #ddd;
+}
+
+.tab {
+  border: 0;
+  background: transparent;
+  padding: 10px 12px;
+  cursor: pointer;
+  font: inherit;
+  border-bottom: 2px solid transparent;
+}
+
+.tab[aria-selected="true"] {
+  font-weight: 700;
+  border-color: #2563eb;
+}
+
+.tab:focus {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.tab-panel {
+  padding: 16px 4px 4px;
+  line-height: 1.5;
+}
