@@ -1,0 +1,52 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f7f7f7;
+  color: #222;
+}
+
+.page {
+  max-width: 640px;
+  margin: 40px auto;
+  padding: 0 16px;
+}
+
+.list {
+  display: grid;
+  gap: 12px;
+}
+
+.card {
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+}
+
+.card h2 {
+  margin: 0 0 8px;
+  font-size: 18px;
+}
+
+.card p,
+.status {
+  margin: 0;
+  color: #555;
+}
+
+.status {
+  padding: 20px;
+  text-align: center;
+}
+
+.error {
+  color: #b91c1c;
+}
+
+.sentinel {
+  height: 1px;
+}
