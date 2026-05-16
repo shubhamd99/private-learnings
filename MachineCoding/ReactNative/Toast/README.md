@@ -1,125 +1,157 @@
-# Global Toast System
+# Toast
 
-Globally triggerable toast system with auto-hide, custom duration, color, icon, manual close, and animated enter/exit. No third-party libraries.
+A modular React Native toast system using plain JavaScript, Context API, and provider-owned timers.
 
-<img src="./preview/01.png" width="300" />
+<p>
+  <img src="preview/01.png" width="800" alt="Toast preview" />
+</p>
 
----
+## Features
 
-## How it works
+- Shows stacked toast messages.
+- Supports custom message, color, icon, and duration.
+- Auto-dismiss is handled by `ToastProvider`.
+- Each new stacked toast stays visible longer than the previous one.
+- Each toast displays its own visible time, such as `3s`, `4s`, or `5s`.
+- No animated toast layer.
+- Each component keeps its own styles.
 
+## Folder Structure
+
+```txt
+Toast/
+  App.js
+  components/
+    ToastDemo.js
+    ToastContainer.js
+    Toast.js
+  constants/
+    toast.js
+  context/
+    ToastContext.js
+  hooks/
+    useToast.js
 ```
-useToast().showToast(options)
+
+## Responsibilities
+
+| File                           | Responsibility                                        |
+| ------------------------------ | ----------------------------------------------------- |
+| `App.js`                       | Wraps demo screen with `ToastProvider`.               |
+| `components/ToastDemo.js`      | Demo buttons that call `showToast`.                   |
+| `components/ToastContainer.js` | Positions and renders the toast stack.                |
+| `components/Toast.js`          | Pure toast UI component.                              |
+| `context/ToastContext.js`      | Stores toast list, adds/removes toasts, owns timers.  |
+| `hooks/useToast.js`            | Exposes `showToast` from context.                     |
+| `constants/toast.js`           | Stores colors, max toast count, and default duration. |
+
+## How It Works
+
+```txt
+Button calls showToast(options)
         |
         v
-ToastProvider  ──────────────────────────  adds item to toasts[] (max 5)
+ToastProvider creates id and visibleFor time
         |
         v
-ToastContainer  ─────────────────────────  maps toasts[] → <AnimatedToast>
+Toast is added to state
         |
         v
-AnimatedToast  ──────────────────────────  plays enter/exit animation
+ToastContainer renders stacked toasts
         |
         v
-Toast  ──────────────────────────────────  renders UI + starts auto-hide timer
-        |
-        v
-onClose  ────────────────────────────────  AnimatedToast plays exit, then removes from state
+Provider timeout removes toast after visibleFor
 ```
 
----
+## Machine Coding Cheat Sheet
 
-## Component structure
+### 1. Keep toast state in provider
 
-```
-ToastProvider  (Context + queue state)
-  └── children
-  └── ToastContainer  (absolute positioned, bottom-right)
-        └── AnimatedToast  (opacity + translateY animation wrapper)
-              └── Toast  (UI: icon | message | ✕ button)
+```jsx
+const [toasts, setToasts] = useState([]);
 ```
 
----
+### 2. Add toast and schedule removal
 
-## File structure
+```jsx
+const showToast = useCallback(
+  (options) => {
+    const id = ++nextId;
 
+    setToasts((prev) => {
+      if (prev.length >= MAX_TOASTS) return prev;
+
+      const duration = options.duration || DEFAULT_DURATION;
+      const extraDelay = prev.length * 1000;
+      const visibleFor = duration + extraDelay;
+
+      setTimeout(() => {
+        removeToast(id);
+      }, visibleFor);
+
+      return [...prev, { ...options, id, visibleFor }];
+    });
+  },
+  [removeToast],
+);
 ```
-src/
-  Toast/
-    constants.ts       MAX_TOASTS, DEFAULT_DURATION, TOAST_COLORS
-    styles.ts          toastStyles, animatedToastStyles, containerStyles
-    Toast.tsx          UI + auto-hide timer
-    AnimatedToast.tsx  enter/exit animation wrapper
-    ToastContainer.tsx renders stacked toasts
-    ToastContext.tsx   Context + Provider + queue logic
-    useToast.ts        public hook
-    index.ts           barrel export
-  styles.ts            ToastDemo styles
-  ToastDemo.tsx        demo screen
-App.tsx
+
+### 3. Remove toast by id
+
+```jsx
+const removeToast = useCallback((id) => {
+  setToasts((prev) => prev.filter((toast) => toast.id !== id));
+}, []);
 ```
 
----
+### 4. Render toast stack
+
+```jsx
+<View style={styles.container} pointerEvents="box-none">
+  {toasts.map((toast) => (
+    <Toast key={toast.id} {...toast} onClose={() => onClose(toast.id)} />
+  ))}
+</View>
+```
+
+### 5. Show duration in UI
+
+```jsx
+{
+  visibleFor ? (
+    <Text style={styles.time}>{Math.round(visibleFor / 1000)}s</Text>
+  ) : null;
+}
+```
 
 ## Usage
 
-Wrap your app in `ToastProvider`, then call `useToast()` from any component:
-
-```tsx
-// App.tsx
-import { ToastProvider } from './src/Toast';
-
-export default function App() {
-  return (
-    <ToastProvider>
-      <YourApp />
-    </ToastProvider>
-  );
-}
-
-// AnyComponent.tsx
-import { useToast } from './src/Toast';
-
+```jsx
 const { showToast } = useToast();
 
 showToast({
-  message: 'File saved!',
-  color: '#2e7d32',
-  icon: '✓',
+  message: "File saved successfully!",
+  color: "#2e7d32",
+  icon: "✓",
   duration: 2000,
 });
 ```
 
----
+## Interview Follow-ups
 
-## Toast options
+| Requirement            | Approach                                             |
+| ---------------------- | ---------------------------------------------------- |
+| Top toast position     | Change container `top`/`bottom` styles.              |
+| Different variants     | Add helper methods like `success`, `error`, `info`.  |
+| Queue instead of limit | Store pending toasts and show next after removal.    |
+| Pause on press         | Move timer ids into provider and clear/restart them. |
+| Animated toast         | Wrap `Toast` with `Animated.View` or Reanimated.     |
+| Global access          | Wrap app root with `ToastProvider`.                  |
 
-| Prop       | Type     | Default     | Description                       |
-| ---------- | -------- | ----------- | --------------------------------- |
-| `message`  | `string` | required    | Text displayed in the toast       |
-| `duration` | `number` | `3000`      | Auto-hide delay in ms             |
-| `color`    | `string` | `'#323232'` | Background color                  |
-| `icon`     | `string` | —           | Emoji or short string on the left |
+## Edge Cases
 
----
-
-## Animation
-
-| Phase | opacity | translateY | Duration |
-| ----- | ------- | ---------- | -------- |
-| Enter | `0 → 1` | `20 → 0`   | 200ms    |
-| Exit  | `1 → 0` | `0 → -20`  | 150ms    |
-
-`useNativeDriver: true` — both `opacity` and `transform` are GPU-composited, no JS bridge per frame.
-
----
-
-## Key concepts
-
-**No prop drilling** — `ToastProvider` stores the queue in Context. Any component anywhere in the tree calls `useToast()` to trigger a toast.
-
-**Queue management** — `showToast` is wrapped in `useCallback` for stable identity. New toasts are blocked when `MAX_TOASTS` (5) is reached. Each toast removes itself from the array by id on close.
-
-**Animated close** — `AnimatedToast` intercepts `onClose`, plays the exit animation, and only removes the toast from state after `.start()` completes — so the toast stays visible during its exit.
-
-**Auto-hide timer** — started once on mount inside `Toast` with a `useRef`-guarded `setTimeout`. Calls `handleClose` (not `onClose` directly), so the exit animation always runs regardless of whether the close is manual or automatic.
+- Empty message should not create a toast.
+- If `MAX_TOASTS` is reached, do not start a timer for a skipped toast.
+- Manual close can run before the timeout; filtering by id keeps it safe.
+- Use stable ids so duplicate messages can still be removed independently.
+- Provider-owned timers keep `Toast` as a pure UI component.
