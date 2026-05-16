@@ -1,107 +1,92 @@
-# Light / Dark Theme Switcher
+# Theme Switcher
 
-> Machine Coding — confirmed asked July 2025
+A modular React Native light/dark theme switcher using Context API and a custom hook.
 
----
-
-## Preview
-
-<p align="center">
-  <img src="preview/image-01.png" width="260" alt="Light theme" />
-  &nbsp;&nbsp;&nbsp;
-  <img src="preview/image-02.png" width="260" alt="Dark theme" />
+<p>
+  <img src="preview/01.png" width="800" alt="Theme switcher preview" />
 </p>
 
----
+## Features
 
-## What it does
+- Toggles between light and dark theme.
+- Uses `ThemeProvider` to avoid prop drilling.
+- Uses a custom `useTheme` hook for clean access.
+- Keeps files organized by responsibility.
+- Uses plain JavaScript only.
 
-Toggle between light and dark themes app-wide using a single button.
-No prop drilling — any component anywhere in the tree can read and change the theme.
+## Folder Structure
 
----
-
-## Setup
-
-```bash
-npm install
-npx react-native run-ios     # or run-android
+```txt
+ThemeSwitcher/
+  App.js
+  components/
+    HomeScreen.js
+  context/
+    ThemeContext.js
+  hooks/
+    useTheme.js
 ```
 
----
+## Responsibilities
 
-## File Structure
+| File                       | Responsibility                                         |
+| -------------------------- | ------------------------------------------------------ |
+| `App.js`                   | Wraps the app with `ThemeProvider`.                    |
+| `components/HomeScreen.js` | Renders UI and consumes theme values.                  |
+| `context/ThemeContext.js`  | Stores themes, context, provider, and toggle logic.    |
+| `hooks/useTheme.js`        | Reads theme context and guards missing provider usage. |
 
-```
-src/
-  ThemeContext.tsx  — theme colours, Context, Provider
-  useTheme.ts       — custom hook (shortcut for useContext)
-  HomeScreen.tsx    — UI that consumes the hook
-App.tsx             — wraps app in ThemeProvider
-```
+## How It Works
 
----
-
-## Key Concepts
-
-**`createContext`** — creates a React context object. Takes a default value (we use `undefined` and guard against it in the hook). Any component inside the Provider can read this context.
-
-**`useContext(ThemeContext)`** — reads the nearest Provider's value. Re-renders the component whenever the value changes (i.e. when theme toggles).
-
-**Custom `useTheme` hook** — thin wrapper over `useContext`. Two benefits:
-
-1. Screens write `useTheme()` instead of `useContext(ThemeContext)` — cleaner
-2. Throws a clear error if used outside `<ThemeProvider>`
-
-**`ThemeProvider`** — holds `useState('light')`. Passes `{ theme, colors, toggleTheme }` to all children via Context. No prop drilling needed.
-
-**Dynamic `StyleSheet`** — `makeStyles(colors)` is called inside the component so it rebuilds with new colours on every theme toggle. The function is defined outside the component to avoid redefining it on every render.
-
----
-
-## Data Flow
-
-```
-ThemeProvider (useState)
-  └─ ThemeContext.Provider  value = { theme, colors, toggleTheme }
-       └─ HomeScreen
-            └─ useTheme()   reads value from context
-                 └─ makeStyles(colors)  builds dynamic StyleSheet
-                 └─ toggleTheme()       flips light ↔ dark
+```txt
+ThemeProvider keeps theme in state
+        |
+        v
+Provider shares { theme, colors, toggleTheme }
+        |
+        v
+HomeScreen calls useTheme()
+        |
+        v
+User taps button
+        |
+        v
+toggleTheme switches light <-> dark
 ```
 
----
+## Machine Coding Cheat Sheet
 
-## Build It Step by Step
+### 1. Define theme colors
 
-**Step 1 — Define colours**
-
-```ts
-const themes = {
-  light: { background: '#fff', text: '#000', ... },
-  dark:  { background: '#121212', text: '#fff', ... },
+```jsx
+export const themes = {
+  light: {
+    background: "#ffffff",
+    text: "#111827",
+    button: "#2563eb",
+    buttonText: "#ffffff",
+  },
+  dark: {
+    background: "#111827",
+    text: "#ffffff",
+    button: "#60a5fa",
+    buttonText: "#111827",
+  },
 };
 ```
 
-**Step 2 — Create context**
+### 2. Create context and provider
 
-```ts
-// undefined default so the hook can detect missing provider
-const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
-```
+```jsx
+export const ThemeContext = createContext(null);
 
-**Step 3 — Create provider**
+export function ThemeProvider({ children }) {
+  const [theme, setTheme] = useState("light");
 
-```ts
-const ThemeProvider = ({ children }) => {
-  // Seed from OS setting on mount. Falls back to 'light' if system returns null.
-  const systemTheme = useColorScheme();
-  const [theme, setTheme] = useState<ThemeType>(
-    systemTheme === 'dark' ? 'dark' : 'light',
-  );
+  function toggleTheme() {
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+  }
 
-  const toggleTheme = () =>
-    setTheme(prev => (prev === 'light' ? 'dark' : 'light'));
   return (
     <ThemeContext.Provider
       value={{ theme, colors: themes[theme], toggleTheme }}
@@ -109,49 +94,56 @@ const ThemeProvider = ({ children }) => {
       {children}
     </ThemeContext.Provider>
   );
-};
+}
 ```
 
-**Step 4 — Create custom hook**
+### 3. Create custom hook
 
-```ts
-const useTheme = () => {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error('useTheme must be used inside <ThemeProvider>');
-  return ctx;
-};
+```jsx
+export default function useTheme() {
+  const context = useContext(ThemeContext);
+
+  if (!context) {
+    throw new Error("useTheme must be used inside ThemeProvider");
+  }
+
+  return context;
+}
 ```
 
-**Step 5 — Consume in any component**
+### 4. Consume theme in component
 
-```ts
+```jsx
 const { theme, colors, toggleTheme } = useTheme();
-const styles = makeStyles(colors); // dynamic styles
+const styles = getStyles(colors);
 ```
 
-**Step 6 — Wrap app**
+### 5. Wrap app with provider
 
-```tsx
-<ThemeProvider>
-  <HomeScreen />
-</ThemeProvider>
+```jsx
+export default function App() {
+  return (
+    <ThemeProvider>
+      <HomeScreen />
+    </ThemeProvider>
+  );
+}
 ```
 
----
+## Interview Follow-ups
 
-## Interview Script
+| Requirement      | Approach                                        |
+| ---------------- | ----------------------------------------------- |
+| Persist theme    | Save selected theme in `AsyncStorage`.          |
+| Use system theme | Seed state from `useColorScheme()`.             |
+| More themes      | Add more keys to the `themes` object.           |
+| Global styles    | Put shared spacing/font values in theme object. |
+| Disable flicker  | Load persisted theme before rendering UI.       |
+| Multiple screens | Wrap navigation root with `ThemeProvider`.      |
 
-> "I'll create a ThemeContext that holds the active theme and a toggle function.
-> A ThemeProvider wraps the app and stores theme in useState.
-> A custom useTheme hook wraps useContext for cleaner imports and adds a missing-provider guard.
-> Each screen calls useTheme(), gets the colour set, and passes it to makeStyles() for dynamic StyleSheets.
-> No prop drilling at any level."
+## Edge Cases
 
-```
-1. colours object   → { light: {...}, dark: {...} }
-2. createContext    → ThemeContext with undefined default
-3. Provider         → useState holds 'light'|'dark', passes colors + toggleTheme
-4. useTheme hook    → useContext + missing-provider guard
-5. Dynamic styles   → makeStyles(colors) called inside component
-6. Wrap app         → <ThemeProvider> at root
-```
+- `useTheme` must be called inside `ThemeProvider`.
+- Missing theme keys can break dynamic styles.
+- Persisted theme should fall back to light or system theme if invalid.
+- Dynamic styles should be rebuilt when colors change.
