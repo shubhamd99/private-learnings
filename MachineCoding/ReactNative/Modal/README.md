@@ -1,71 +1,136 @@
 # Modal
 
-> Machine Coding — RN built-in `<Modal>`, no third-party package
+A modular React Native modal example using the built-in `Modal` component.
 
-<p align="center">
-  <img src="preview/01.png" width="280" alt="Modal closed" />
-  <img src="preview/02.png" width="280" alt="Modal open" />
+<p>
+  <img src="preview/01.png" width="800" alt="Modal preview" />
 </p>
 
----
+## Features
 
-## File structure
+- Reusable `AppModal` component inside `components/`.
+- Supports custom title and body content through `children`.
+- Handles confirm and cancel actions.
+- Closes on backdrop press.
+- Supports Android back button through `onRequestClose`.
+- Uses minimal styling for machine-coding readability.
 
-```
-src/
-  styles.ts     — all styles
-  AppModal.tsx  — Modal component
-  ModalApp.tsx  — root screen (holds visible state)
-App.tsx
-```
+## Component Structure
 
----
-
-## How it works
-
-```
-Open pressed → setVisible(true)
-  <Modal visible={true} transparent animationType="fade">
-    <TouchableOpacity overlay />        ← absoluteFill, behind card
-    <View cardContainer>                ← flex:1 centered, on top
-      <View card> title + body + Close
-Close pressed (button OR overlay tap OR Android back) → setVisible(false)
+```txt
+App.js
+  └── components/AppModal.js
 ```
 
----
+## Usage
 
-## Why `absoluteFill` for the overlay
-
-The overlay must not wrap the card — if it did, taps on the card would bubble up and close the modal.
-
-Instead:
-
-- Overlay = `TouchableOpacity` with `absoluteFill` → rendered **first** (behind)
-- Card = separate sibling `View` → rendered **after** (on top)
-
-React Native renders children in order: later children appear on top and intercept touches first. So card touches never reach the overlay.
-
+```jsx
+<AppModal
+  visible={isModalVisible}
+  title="Delete item?"
+  confirmText="Delete"
+  cancelText="Keep"
+  onClose={closeModal}
+  onConfirm={handleConfirm}
+>
+  <Text>This action will remove the selected item.</Text>
+</AppModal>
 ```
-<Modal>
-  <TouchableOpacity style={absoluteFill} />   ← z-order: bottom, catches outside taps
-  <View cardContainer>                         ← z-order: top, blocks overlay touches
-    <View card> … </View>
-  </View>
+
+## Props
+
+| Prop          | Type        | Default     | Description                         |
+| ------------- | ----------- | ----------- | ----------------------------------- |
+| `visible`     | `boolean`   | -           | Controls modal open or close state. |
+| `title`       | `string`    | -           | Modal heading text.                 |
+| `children`    | `ReactNode` | -           | Custom modal body content.          |
+| `confirmText` | `string`    | `"Confirm"` | Confirm button label.               |
+| `cancelText`  | `string`    | `"Cancel"`  | Cancel button label.                |
+| `onClose`     | `function`  | -           | Runs when modal should close.       |
+| `onConfirm`   | `function`  | -           | Runs when confirm button is tapped. |
+
+## Machine Coding Cheat Sheet
+
+### 1. Keep open state in parent
+
+```jsx
+const [isModalVisible, setIsModalVisible] = useState(false);
+
+function openModal() {
+  setIsModalVisible(true);
+}
+
+function closeModal() {
+  setIsModalVisible(false);
+}
+```
+
+### 2. Use built-in Modal
+
+```jsx
+<Modal
+  visible={visible}
+  transparent
+  animationType="fade"
+  onRequestClose={onClose}
+>
+  {/* modal UI */}
 </Modal>
 ```
 
----
+### 3. Add backdrop close
 
-## Key `<Modal>` props
+Place a full-screen `Pressable` behind the card.
 
-| Prop             | Why                                       |
-| ---------------- | ----------------------------------------- |
-| `transparent`    | draw our own overlay colour               |
-| `animationType`  | `"fade"` — simple in/out                  |
-| `onRequestClose` | Android hardware back button closes modal |
+```jsx
+<View style={styles.overlay}>
+  <Pressable style={StyleSheet.absoluteFill} onPress={onClose} />
+  <View style={styles.card}>{/* content */}</View>
+</View>
+```
 
----
+### 4. Make content reusable
 
-## Interview Script
+Use `children` so the modal can render any body content.
 
-> "One boolean in parent. Overlay is an `absoluteFill` TouchableOpacity rendered before the card so it sits behind it — card touches never bubble to the overlay. Three close paths: overlay tap, Close button, Android back — all call the same `onClose`."
+```jsx
+function AppModal({ title, children }) {
+  return (
+    <View>
+      <Text>{title}</Text>
+      <View>{children}</View>
+    </View>
+  );
+}
+```
+
+### 5. Wire confirm and cancel
+
+```jsx
+<Pressable onPress={onClose}>
+  <Text>{cancelText}</Text>
+</Pressable>
+
+<Pressable onPress={onConfirm}>
+  <Text>{confirmText}</Text>
+</Pressable>
+```
+
+## Interview Follow-ups
+
+| Requirement        | Approach                                           |
+| ------------------ | -------------------------------------------------- |
+| Alert modal        | Pass title, message, and one confirm button.       |
+| Bottom sheet modal | Align content with `justifyContent: "flex-end"`.   |
+| Disable backdrop   | Add a `closeOnBackdropPress` prop.                 |
+| Loading on confirm | Add `loading` prop and disable the confirm button. |
+| Custom footer      | Accept a `footer` prop or render buttons manually. |
+| Keyboard support   | Wrap content with `KeyboardAvoidingView`.          |
+
+## Edge Cases
+
+- Android back press: always pass `onRequestClose`.
+- Accidental close: make backdrop close configurable for destructive actions.
+- Long content: wrap modal body in `ScrollView`.
+- Multiple modals: keep one source of truth for which modal is active.
+- Accessibility: add labels and announce important modal text.
