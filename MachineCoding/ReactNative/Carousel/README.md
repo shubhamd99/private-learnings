@@ -3,7 +3,7 @@
 A simple React Native carousel built with `FlatList`, horizontal paging, pagination dots, and optional autoplay.
 
 <p>
-  <img src="preview/01.png" width="300" alt="Carousel preview" />
+  <img src="preview/01.png" width="800" alt="Carousel preview" />
 </p>
 
 ## Features
