@@ -8,8 +8,12 @@
 // Output: [1,2,3,5]
 // Explanation: After sorting the array, the positions of some numbers are not changed (for example, 2 and 3), while the positions of other numbers are changed (for example, 1 and 5).
 
-// Steps:
+// Divide and Conquer / Merge Sort
 
+// Quick Sort partitions first, then sorts parts.
+// Merge Sort sorts parts first, then merges them.
+
+// Steps:
 // 1. Divide:
 // Break the problem into smaller parts.
 // 2. Conquer:

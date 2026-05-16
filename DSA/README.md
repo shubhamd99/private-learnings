@@ -242,12 +242,13 @@
 
 | #   | Problem                       | LC ID | Difficulty |
 | --- | ----------------------------- | ----- | ---------- |
-| 1   | Implement Queue Using Stacks  | 232   | Easy       |
-| 2   | Sliding Window Maximum        | 239   | Hard       |
-| 3   | Kth Largest Element in Stream | 703   | Easy       |
-| 4   | Top K Frequent Elements       | 347   | Medium     |
-| 5   | Task Scheduler                | 621   | Medium     |
-| 6   | K Closest Points to Origin    | 973   | Medium     |
+| 1   | Kth Largest Element in Array  | 215   | Medium     |
+| 2   | Implement Queue Using Stacks  | 232   | Easy       |
+| 3   | Sliding Window Maximum        | 239   | Hard       |
+| 4   | Kth Largest Element in Stream | 703   | Easy       |
+| 5   | Top K Frequent Elements       | 347   | Medium     |
+| 6   | Task Scheduler                | 621   | Medium     |
+| 7   | K Closest Points to Origin    | 973   | Medium     |
 
 ### DAY 15 — Two Heaps and Intervals
 
@@ -533,7 +534,7 @@
 | -------------- | ----- |
 | Total Days     | 36    |
 | Total Patterns | 44    |
-| Total Problems | 190   |
+| Total Problems | 191   |
 | **Easy**       | 43    |
-| **Medium**     | 110   |
+| **Medium**     | 111   |
 | **Hard**       | 37    |
