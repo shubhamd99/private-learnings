@@ -39,6 +39,8 @@ For every index i:
 
 import Deque from "./00-Deque";
 
+// Time - O(n)
+// Space - O(k)
 /**
  * @param {number[]} nums
  * @param {number} k

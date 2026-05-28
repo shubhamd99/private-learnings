@@ -19,6 +19,15 @@ For Sliding Window Maximum, we mainly need:
 
 This implementation avoids Array.shift(),
 because shift() is O(n) in JavaScript.
+
+pushBack:  O(1)
+popBack:   O(1)
+pushFront: O(1)
+popFront:  O(1)
+front:     O(1)
+back:      O(1)
+size:      O(1)
+isEmpty:   O(1)
 */
 
 class Deque {
