@@ -16,6 +16,11 @@
 // Each push/pop costs O(log k).
 // Heap size never grows bigger than k + 1.
 
+// peek: O(1)
+// push: O(log m)
+// pop:  O(log m)
+// Space: O(m)
+
 class MinHeap {
   constructor() {
     this.heap = [];
