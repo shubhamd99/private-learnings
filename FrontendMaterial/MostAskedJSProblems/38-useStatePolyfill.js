@@ -85,8 +85,11 @@ function useState(initialValue) {
   return [hooks[localIndex], setState];
 }
 
-// Simulates React's internal scheduler
-function render() {
-  index = 0;
-  App();
+// ==========================================
+// Your React App
+// ==========================================
+export default function App() {
+  // IMPORTANT: We must manually reset the tracker to 0 at the top of the
+  // component so it aligns perfectly with every React render cycle!
+  hookIdTracker = 0;
 }
