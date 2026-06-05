@@ -1,10 +1,9 @@
 // Throttling is a way/technique to restrict the number of function execution/call.
-
-//Excessive function invocations in Javascript applications hamper the performance drastically.
+// Excessive function invocations in Javascript applications hamper the performance drastically.
 
 // There are scenarios where we may invoke functions when it isn’t necessary.
 // For example, consider a scenario where we want to make an API call to the
-// server on a button click.If the user spam the click then this will make an API call on each click.
+// server on a button click. If the user spam the click then this will make an API call on each click.
 // This is not what we want, we want to restrict the no of API calls that can be made.
 // The other call will be made only after a specified interval of time.
 
@@ -12,113 +11,43 @@
 
 // while when trailing is enabled the first function will invoke after the delay and so on.
 
-// We will be using useRef() to track the timerId of setTimeout so that we can reset it as an when required and previous arguments.
+import { useRef, useCallback } from "react";
 
-// Also, we will wrap the logic inside the useCallback() to avoid needless
-// re-renderings as the callback function returns a memoized function that
-// only change when one of the dependency changes.
+// By wrapping the returned logic in useCallback(),
+// we guarantee that React returns the exact same function reference across re-renders,
+// keeping the rest of the application optimized and stable!
 
-import { useCallback, useRef } from "react";
-
-const useThrottle = (fn, wait, option = { leading: true, trailing: true }) => {
-  const timerId = useRef(); // track the timer
-  const lastArgs = useRef(); // track the arguments
-
-  // create a memoized debounce
-  const throttle = useCallback(
-    function (...args) {
-      const { trailing, leading } = option;
-
-      // function for delayed call
-      const waitFunc = () => {
-        // if trailing invoke the function and start the timer again
-        // lastArgs.current is not null means there is a pending call
-        if (trailing && lastArgs.current) {
-          fn.apply(this, lastArgs.current);
-          lastArgs.current = null;
-          timerId.current = setTimeout(waitFunc, wait);
-        } else {
-          // else reset the timer
-          timerId.current = null;
-        }
-      };
-
-      // if leading run it right away
-      if (!timerId.current && leading) {
-        fn.apply(this, args);
-        // else store the args
-        // will be used in trailing call
-      } else {
-        lastArgs.current = args;
-      }
-
-      // run the delayed call
-      if (!timerId.current) {
-        timerId.current = setTimeout(waitFunc, wait);
-      }
-    },
-    [fn, wait, option],
-  );
-
-  return throttle;
-};
-
-const Example = () => {
-  const print = () => {
-    console.log("hello");
-  };
-
-  const throttled = useThrottle(print, 2500, {
-    leading: true,
-    trailing: false,
-  });
-
-  return <button onClick={throttled}> click me</button>;
-};
-
-// Output:
-// "hello" // immediately
-// "hello" // after 2500 milliseconds of last call
-// "hello" // after 2500 milliseconds of last call
-
-const Example2 = () => {
-  const print = () => {
-    console.log("hello");
-  };
-
-  const throttled = useThrottle(print, 2500, {
-    leading: false,
-    trailing: true,
-  });
-
-  return <button onClick={throttled}> click me</button>;
-};
-
-// Output:
-// "hello" // after 2500 milliseconds
-// "hello" // after 2500 milliseconds of last call
-// "hello" // after 2500 milliseconds of last call
-
-const useThrottle2 = (fn, wait) => {
-  const timerId = useRef(null);
+function useThrottle(callback, delay) {
+  // Use a ref to track whether we are currently on "cooldown"
+  const isWaiting = useRef(false);
 
   return useCallback(
     (...args) => {
-      if (timerId.current) return; // already waiting, ignore
+      // 1. If we are on cooldown, ignore the click entirely
+      if (isWaiting.current) return;
 
-      fn(...args); // call immediately
+      // 2. We are not on cooldown! Execute the function immediately
+      callback(...args);
 
-      timerId.current = setTimeout(() => {
-        timerId.current = null; // reset after wait
-      }, wait);
+      // 3. Put the function on cooldown
+      isWaiting.current = true;
+
+      // 4. Remove the cooldown after the delay has passed
+      setTimeout(() => {
+        isWaiting.current = false;
+      }, delay);
     },
-    [fn, wait],
+    [callback, delay],
   );
-};
+}
 
-// const handleScroll = useThrottle(() => {
-//   console.log("scroll fired");
-// }, 500);
+function Checkout() {
+  const buyItem = () => {
+    console.log("API Call: Purchasing item...");
+  };
 
-// // attach to scroll event
-// <ScrollView onScroll={handleScroll} />
+  // The button can only trigger the API once every 3 seconds
+  const throttledBuy = useThrottle(buyItem, 3000);
+
+  return <button onClick={throttledBuy}>Buy Now</button>;
+}
