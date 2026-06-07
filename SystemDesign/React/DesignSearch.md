@@ -505,6 +505,24 @@ Follow the WAI-ARIA combobox pattern, do not invent your own roles.
 - `Escape` to dismiss results.
 - `aria-activedescendant` to manage focus.
 
+### 6. Observability
+
+To maintain reliability, we need to monitor the component's performance and usage in production using Application Performance Monitoring (APM) tools like **Datadog**, **New Relic**, or **Sentry**:
+
+- **Metrics (Latency):** Track the end-to-end latency of autocomplete requests from the client's perspective (e.g., via New Relic Browser or Datadog RUM) to ensure the P95 latency stays under ~200ms.
+- **Business Metrics:** Track the "Zero-Result Rate" (queries that return no suggestions) via custom events in APM tools to improve the backend search index or fuzzy matching.
+- **Tracing:** Inject tracing IDs (e.g., OpenTelemetry) into request headers to trace slow queries from the frontend all the way to the backend database (Distributed Tracing in Datadog/New Relic).
+- **Error Tracking:** Log network errors, timeout rates, unhandled exceptions, and 429 Rate Limited responses to tools like **Sentry** or Bugsnag to proactively detect UI issues.
+
+### 7. Scaling to a Million Users
+
+Autocomplete is a highly read-heavy system that receives traffic bursts.
+
+- **Edge Caching / CDN:** Cache popular prefixes (e.g., "rea", "react", "face") at the CDN edge level using short TTLs. This absorbs the majority of identical keystrokes before they ever hit the application servers.
+- **Backend Search Index:** Rely on distributed search engines like Elasticsearch or Algolia. Use read replicas specifically dedicated to autocomplete queries to handle high read throughput without impacting the main search infrastructure.
+- **Tuning Debounce & Min Query Length:** If server load is too high during traffic spikes, the frontend can dynamically increase the debounce threshold (e.g., 300ms -> 500ms) or increase the minimum query length (from 2 to 3 chars) via a remote config/feature flag to shed load instantly.
+- **Rate Limiting:** Enforce strict per-IP or per-user rate limiting to prevent malicious bots from scraping the autocomplete endpoint.
+
 ---
 
 ## Summary
