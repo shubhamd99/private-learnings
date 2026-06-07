@@ -31,6 +31,18 @@ When rendering images, especially in a feed or gallery, you should be aware of s
    - _Example_: `<img src="..." fetchpriority="high" />`
 4. **`srcset` and `sizes`**: Used for responsive images. Allows the browser to download a smaller, lighter version of the image on mobile devices and a high-resolution version on desktop.
    - _Example_: `<img srcset="small.jpg 500w, large.jpg 1000w" sizes="(max-width: 600px) 500px, 1000px" />`
+5. **The `<picture>` Tag (Format Fallbacks)**: The `<picture>` element is used to serve modern, highly-compressed image formats (like `AVIF` or `WebP`) to browsers that support them, while automatically falling back to legacy formats (like `JPEG` or `PNG`) for older browsers. The browser evaluates the `<source>` tags from top to bottom and only downloads the _first_ one it supports.
+   - _Example_:
+     ```html
+     <picture>
+       <!-- Browser tries AVIF first (highest compression/quality) -->
+       <source srcset="image.avif" type="image/avif" />
+       <!-- If AVIF is not supported, it tries WebP -->
+       <source srcset="image.webp" type="image/webp" />
+       <!-- Fallback for older browsers (Safari < 14, IE11) -->
+       <img src="image.jpg" alt="..." loading="lazy" decoding="async" />
+     </picture>
+     ```
 
 While these native attributes are incredibly powerful and are used in this code, frontend interviews frequently ask you to implement lazy loading using the custom `IntersectionObserver` pattern manually. This is because doing it manually tests your understanding of browser APIs and allows for highly customized fallback UIs or scroll-triggered animations that native attributes can't handle. However, for a production app, utilizing native `loading="lazy"` (as demonstrated in `App.js`) is the optimal modern approach!
 
