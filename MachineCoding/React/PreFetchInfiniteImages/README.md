@@ -1,11 +1,13 @@
 # Lazy Load & Prefetch with Infinite Scroll (Observer Pattern)
 
+<img src="./images/01.png" width="500" alt="Preview" />
+
 This machine coding example demonstrates how to combine **Infinite Scrolling**, **Lazy Loading**, and **Image Prefetching** in React using the `IntersectionObserver` API.
 
 ## Features:
 
-1. **Infinite Scroll**: Uses an `IntersectionObserver` on a sentinel element at the bottom of the list. When the sentinel enters the viewport (with a `300px` root margin to trigger early), the next page of data is fetched.
-2. **Lazy Loading**: Each image is wrapped in a `LazyImage` component which uses its own `IntersectionObserver`. The actual `<img src={...}>` is only rendered when the image is close to entering the viewport. This prevents downloading hundreds of images at once.
+1. **Infinite Scroll**: Uses an `IntersectionObserver` on a sentinel element at the bottom of the list. When the sentinel enters the viewport (with a large `1000px` root margin to trigger early), the next page of data is fetched. This gives the network ample time to download JSON and prefetch images before the user sees them.
+2. **Lazy Loading**: Each image is wrapped in a `LazyImage` component. Instead of a complex observer, it utilizes the native `loading="lazy"` attribute. The browser handles deferring the network request until the image scrolls near the viewport.
 3. **Prefetching**: When a new batch of data is fetched, the image URLs are prefetched into the browser's cache using `new Image().src`. Because they are cached in the background, when the user scrolls down and triggers the lazy load, the images render instantly without a network delay.
 4. **Shimmer UI**: While the image is lazy-loading or waiting to be fetched, a CSS skeleton shimmer is displayed.
 
@@ -30,7 +32,7 @@ When rendering images, especially in a feed or gallery, you should be aware of s
 4. **`srcset` and `sizes`**: Used for responsive images. Allows the browser to download a smaller, lighter version of the image on mobile devices and a high-resolution version on desktop.
    - _Example_: `<img srcset="small.jpg 500w, large.jpg 1000w" sizes="(max-width: 600px) 500px, 1000px" />`
 
-While these native attributes are incredibly powerful and often sufficient, the custom `IntersectionObserver` pattern used in this code is frequently asked for in frontend interviews because it allows developers to render complex fallback UI (like animated shimmer effects) while waiting, and lets you trigger custom JavaScript animations when the image finally enters the viewport.
+While these native attributes are incredibly powerful and are used in this code, frontend interviews frequently ask you to implement lazy loading using the custom `IntersectionObserver` pattern manually. This is because doing it manually tests your understanding of browser APIs and allows for highly customized fallback UIs or scroll-triggered animations that native attributes can't handle. However, for a production app, utilizing native `loading="lazy"` (as demonstrated in `App.js`) is the optimal modern approach!
 
 ## How to Run:
 
