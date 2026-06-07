@@ -194,12 +194,12 @@ User:    { id, name, profile_photo_url }
 **Why store Feed as just a list of IDs?**
 Instead of duplicating the full post object everywhere, we store IDs and look up the actual data from the store. Cleaner, no duplication.
 
-**Normalized Store (mention as an advanced concept):**
+**Normalized Store (byIds and allIds pattern):**
 
-- "Normalized" means storing each entity once, referenced by ID — like a relational database
+- "Normalized" means storing each entity once, referenced by ID — like a relational database. Twitter structures its state heavily using `byIds` (an object mapping IDs to post details) and `allIds` (an array of IDs for maintaining order).
 - Example: 10 posts all by the same user — instead of storing the user's name/photo 10 times inside each post, store the user once and have each post reference `userId: 5`
-- Benefit: if the user changes their profile photo, it updates everywhere instantly
-- Libraries: Redux (with normalizr), Relay
+- Benefit: if the user changes their profile photo, it updates everywhere instantly without traversing the entire feed.
+- Libraries: Zustand, Redux (with normalizr), React-Query, Relay
 
 ---
 
@@ -298,11 +298,16 @@ observer.observe(sentinelRef.current); // watch the bottom div
 - Much better than a spinner — users see the layout isn't shifting, feels faster
 - Reduces CLS (Cumulative Layout Shift — when content jumps around as it loads)
 
-### Caching Feed State
+### Caching Feed State & Scroll Position
 
-- When a user clicks on a post and comes back, restore the feed from memory instantly
-- Don't re-fetch everything from scratch on every navigation
-- If cached data is too old (hours) → force a fresh fetch
+- When a user navigates away from the feed (e.g. to a profile) and comes back, restore the feed from memory instantly.
+- Cache the scroll position on the client side (e.g., in `sessionStorage` or local state) so the user returns to the exact post they left.
+- If cached data is too old (hours) → force a fresh fetch.
+
+### Dynamic Payload Limits
+
+- Dynamically decide the limit of data pulled in pagination based on device viewport.
+- Desktop: limit to 7-10 records. Mobile: limit to 5-8 records. This helps serve data faster on mobile devices with slower networks.
 
 ---
 
@@ -336,10 +341,10 @@ This makes the app feel instant.
 - Show a blurred placeholder while the image loads on slow connections
 - Pre-load images that are just below the viewport so they're ready when the user scrolls to them
 
-### Icons
+### Icons & Styling
 
-- Use **inline SVGs** instead of icon fonts or separate image files
-- No extra network request, no flash of missing icons while fonts load
+- **Icons**: Use **inline SVGs** instead of icon fonts or separate image files. They can be animated via JS and colored via CSS dynamically. No extra network request is needed.
+- **Atomic CSS**: Facebook adopted Atomic CSS to prevent the bloating of styles. It grows logarithmically based on unique style declarations rather than features, keeping the overall shared stylesheet highly compact.
 
 ### Lazy Loading Heavy UI
 
@@ -347,17 +352,17 @@ This makes the app feel instant.
 - Don't load them on page load — users may never use them
 - Download their JS only when the user clicks/hovers to open them (on demand)
 
-### Data-Driven JS Bundles
+### Data-Driven JS Bundles (Relay & GraphQL)
 
 **Problem:** A feed supports 50+ post types — videos, polls, images, articles, events...
-Loading the JS component for every post type upfront = massive bundle size.
+Loading the JS component for every post type upfront = massive bundle size. Passing all JavaScript bundles on initial load affects performance on slower networks.
 
-**Solution:** Load the rendering code together with the data.
+**Solution:** Load the rendering code together with the data. Facebook follows a philosophy of "as early as possible, as little as possible."
 
-- When the server sends a video post, it also tells the browser: "you'll need `VideoComponent.js`"
-- When it sends an image post: "you'll need `ImageComponent.js`"
-- The browser only downloads what it actually needs for the posts in the current feed
-- This is what Facebook's GraphQL `@match/@module` directives do
+- When using GraphQL and Relay, the server can send the JS bundle name along with the post data.
+- E.g., if a query returns a `VideoPost`, it uses the `@module('VideoComponent.js')` directive.
+- The browser downloads `VideoComponent.js` _only_ if there's a video post in the current feed batch.
+- This prevents loading photo lightbox or video player code if the current batch only has text posts.
 
 ### Rich Text / Mentions / Hashtags
 
@@ -426,7 +431,7 @@ The server can push data to the browser at any time without the browser asking.
 - **Feed fails to load** → show "Something went wrong. Retry?" button — don't leave a blank screen
 - **Like fails** → revert the optimistic update + show an error toast notification
 - **Post creation fails** → keep the draft in the composer, don't clear the text the user typed
-- **User goes offline** → detect with `navigator.onLine` / `online` browser event → show a banner "You're offline" → pause fetching → resume when back online
+- **User goes offline** → Implement the PRPL pattern and use Service Workers to cache resources (Progressive Web App). Detect with `navigator.onLine` → show a banner "You're offline". Reactions can be locally cached and synced when online.
 
 ---
 
