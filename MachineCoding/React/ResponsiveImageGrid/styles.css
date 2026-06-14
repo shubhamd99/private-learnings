@@ -1,0 +1,73 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: #f7f7f7;
+  color: #222;
+}
+
+.page {
+  max-width: 1200px;
+  margin: 40px auto;
+  padding: 0 20px;
+}
+
+h1 {
+  text-align: center;
+  margin-bottom: 8px;
+}
+
+.subtitle {
+  text-align: center;
+  color: #666;
+  margin-bottom: 40px;
+}
+
+code {
+  background: #e2e8f0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.9em;
+  color: #c53030;
+}
+
+/* --- Core CSS Grid Logic --- */
+.image-grid {
+  display: grid;
+  /* 
+   * auto-fit: Fills the row with as many columns as it can fit. 
+   * minmax(250px, 1fr): Each column is at least 250px, but can grow to fill remaining space equally (1fr).
+   * This eliminates the need for @media queries for basic responsiveness!
+   */
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.grid-item {
+  /* 
+   * Maintain a nice aspect ratio uniformly across all items.
+   * "4 / 3" means for every 4 units of width, the height will be 3 units 
+   * (e.g., 400px wide by 300px tall). This creates a standard landscape rectangle.
+   */
+  aspect-ratio: 4 / 3;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #eaeaea; /* Placeholder color while loading */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+}
+
+.grid-item:hover {
+  transform: translateY(-4px);
+}
+
+.grid-item img {
+  width: 100%;
+  height: 100%;
+  /* Ensures images cover the box without distorting aspect ratio */
+  object-fit: cover;
+  display: block; /* Removes bottom spacing on inline images */
+}
