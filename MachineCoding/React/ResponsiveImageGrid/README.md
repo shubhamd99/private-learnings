@@ -1,5 +1,11 @@
 # Responsive Image Grid - React Machine Coding
 
+## Preview
+
+<img src="./preview/01.png" width="800" alt="Desktop Preview" />
+<img src="./preview/02.png" width="800" alt="Mobile Preview" />
+<img src="./preview/03.png" width="800" alt="Mobile Preview" />
+
 A classic frontend interview question that tests your modern CSS layout knowledge. The goal is to create a responsive grid of images **without using any media queries**.
 
 ## The Magic Formula
