@@ -1,0 +1,83 @@
+* { box-sizing: border-box; font-family: sans-serif; }
+body { margin: 0; padding: 20px; background: #f5f5f5; }
+
+.layout {
+  display: flex;
+  gap: 20px;
+  max-width: 1000px;
+  margin: auto;
+}
+
+.main {
+  flex: 1;
+}
+
+.controls {
+  margin-bottom: 20px;
+  display: flex;
+  gap: 10px;
+}
+
+.controls select {
+  padding: 8px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 20px;
+}
+
+.card {
+  background: white;
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+}
+
+.cuisine {
+  font-size: 12px;
+  color: #666;
+  margin-bottom: 15px;
+}
+
+.menu-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 14px;
+}
+
+.menu-item button {
+  cursor: pointer;
+  padding: 2px 8px;
+}
+
+.sidebar {
+  width: 300px;
+  background: white;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+  align-self: flex-start;
+}
+
+.cart-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.cart-item button {
+  margin-right: 10px;
+}
+
+@media (max-width: 768px) {
+  .layout { flex-direction: column; }
+  .sidebar { width: 100%; order: -1; }
+}
