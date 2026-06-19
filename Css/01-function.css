@@ -1,0 +1,89 @@
+/* 
+ * CSS Custom Functions (@function)
+ * 
+ * BROWSER SUPPORT NOTE: 
+ * As of 2024/2025, the `@function` rule (part of the CSS Mixins and Functions Module Level 1)
+ * is a highly EXPERIMENTAL draft specification. 
+ * Native Support: 0% across all major browsers (Chrome, Firefox, Safari).
+ * Usage in production absolutely requires a modern CSS transpiler (like Lightning CSS) 
+ * to compile these custom functions down to static CSS variables or native calc() operations.
+ */
+
+/* 
+ * Normal Function in CSS 
+ * Accepts parameters and returns a modified value. Here, it takes a base color 
+ * and an alpha value, manipulating it via modern relative color syntax (oklch).
+ */
+@function --transparent(--color, --alpha) {
+  result: oklch(from var(--color) l c h / var(--alpha));
+}
+
+/* 
+ * With Default Parameters
+ * The `--alpha` parameter will default to `0.2` if omitted during the function call.
+ * It references a global `--brand-color` variable defined outside its scope.
+ */
+@function --transparent2(--alpha: 0.2) {
+  result: oklch(from var(--brand-color) l c h / var(--alpha));
+}
+
+/* 
+ * With Type Safety
+ * Parameters can be strictly typed using CSS value definition syntax (e.g., <color>, <number>). 
+ * If an invalid type is passed, the function call becomes invalid at computed-value time.
+ */
+@function --transparent3(<color> --color, <number> --alpha) {
+  result: oklch(from var(--color) l c h / var(--alpha));
+}
+
+/* 
+ * Execution Flow (Last declaration wins)
+ * Statements evaluate sequentially. Similar to CSS cascading rules, 
+ * the final valid `result:` encountered inside the block is the one returned.
+ */
+@function --get-color() {
+  result: blue;
+  result: red; /* This wins */
+}
+
+/* 
+ * Conditional Results (At-rules inside functions)
+ * You can nest @media or @supports rules directly inside functions. 
+ * The returned result dynamically reacts to the viewport or environment.
+ */
+@function --responsive-color() {
+  result: blue; /* Default result */
+
+  @media (max-width: 600px) {
+    result: red; /* Overrides blue on mobile viewports */
+  }
+}
+
+/* 
+ * Mathematical Function (Calculate Inner Radius)
+ * A classic utility pattern to prevent "clipping" corners. 
+ * Ensures the inner corner radius perfectly mirrors the outer padding.
+ */
+@function --inner-radius(--outer, --padding) {
+  result: max(0px, calc(var(--outer) - var(--padding)));
+}
+
+:root {
+  --text-color: white;
+  --muted-text-color: oklab(79% 0.001 0.02);
+  --brand-color: oklch(48% 0.3 276);
+  --radius: 16px;
+  --padding: 4px;
+}
+
+.child {
+  /* Calling the custom function using the standard function invocation syntax */
+  border-radius: --inner-radius(var(--radius), var(--padding));
+}
+
+.card {
+  /* Leveraging the custom function to apply transparency dynamically */
+  background-color: --transparent(var(--brand-color), 0.1);
+  /* Omitting arguments safely uses the default alpha: 0.2 */
+  border: 1px solid --transparent2();
+}
