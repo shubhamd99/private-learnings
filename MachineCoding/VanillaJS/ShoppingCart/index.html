@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Vanilla JS Shopping Cart</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Vanilla Store</h1>
+    </header>
+
+    <main>
+      <section class="products" id="product-list">
+        <!-- Products injected by JavaScript -->
+      </section>
+
+      <section class="cart-section">
+        <h2>Your Cart (<span id="cart-count">0</span>)</h2>
+        <div class="cart-items" id="cart-items">
+          <!-- Cart items injected by JavaScript -->
+        </div>
+        <div class="cart-footer">
+          <div class="totals">
+            <p>Subtotal: $<span id="subtotal">0.00</span></p>
+            <p>Discount (10%): -$<span id="discount">0.00</span></p>
+            <h3>Total: $<span id="total">0.00</span></h3>
+          </div>
+          <button class="checkout-btn">Checkout</button>
+        </div>
+      </section>
+    </main>
+
+    <script src="script.js"></script>
+  </body>
+</html>
