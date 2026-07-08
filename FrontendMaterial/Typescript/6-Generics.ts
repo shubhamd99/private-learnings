@@ -122,3 +122,12 @@ const settingsFlags: Booleanify<Settings> = {
   fontSize: false, // originally number, now boolean
   username: true, // originally string, now boolean
 };
+
+// Const Generic
+function first<const T>(arr: T[]) {
+  return arr[0];
+}
+
+// with const T the return type will be: const num: 1 | 2 | 3
+// without const T the return type will be: number
+const num = first([1, 2, 3]);
