@@ -4,6 +4,7 @@ const obj = { a: 1, b: { c: 2 } };
 
 // Built in JS method
 JSON.parse(JSON.stringify(obj));
+structuredClone(obj); // New way
 
 // Shallow copy — nested objects are still REFERENCED
 // const shallow = { ...obj };

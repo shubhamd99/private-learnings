@@ -14,6 +14,8 @@ function cache(fn) {
     }
 
     console.log("Calculating result for:", args);
+    // .apply ensures that the 'this' context of the execution is preserved
+    // const result = fn.apply(this, args);
     memo[key] = fn(...args);
     return memo[key];
   };
