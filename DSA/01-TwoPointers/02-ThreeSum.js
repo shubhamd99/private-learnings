@@ -1,5 +1,9 @@
 // https://leetcode.com/problems/3sum/
 
+// Given an integer array nums, return all the triplets [nums[i], nums[j], nums[k]]
+// such that i != j, i != k, and j != k, and nums[i] + nums[j] + nums[k] == 0.
+// Notice that the solution set must not contain duplicate triplets.
+
 // Time: O(n²) — outer loop O(n) × inner two-pointer scan O(n); sorting is O(n log n) but dominated
 // Space: O(n) — sorting uses O(log n) stack space; output results array can hold O(n²) triplets in the worst case
 
@@ -16,34 +20,40 @@
  * @return {number[][]}
  */
 var threeSum = function (nums) {
-  nums = nums.sort((a, b) => a - b);
-  const results = [];
+  nums.sort((a, b) => a - b);
+  const res = [];
 
-  for (let i = 0; i < nums.length - 2; i++) {
+  // Stop once nums[i] > 0 — with a sorted array, left and right are always
+  // >= nums[i], so three positive numbers can never sum to zero
+  // nums.length - 2 makes sure there are always at least two elements left after i for left and right to occupy.
+  for (let i = 0; i < nums.length - 2 && nums[i] <= 0; i++) {
     if (i > 0 && nums[i] === nums[i - 1]) continue;
-    if (nums[i] > 0) break;
 
     let left = i + 1;
     let right = nums.length - 1;
 
     while (left < right) {
-      let sum = nums[i] + nums[left] + nums[right];
+      const sum = nums[i] + nums[left] + nums[right];
 
-      if (sum === 0) {
-        results.push([nums[i], nums[left], nums[right]]);
+      if (sum < 0) {
         left++;
+      } else if (sum > 0) {
         right--;
-
-        // after finding a valid triplet, skip duplicate values for left and right to avoid pushing the same triplet again
-        while (left < right && nums[left] === nums[left - 1]) left++; // moving outwards, prev value -> -1
-        while (left < right && nums[right] === nums[right + 1]) right--; // moving inwards, prev value -> + 1
-      } else if (sum < 0) {
-        left++;
       } else {
+        res.push([nums[i], nums[left], nums[right]]);
+
+        left++;
         right--;
+
+        // Skip duplicates of the value we just used on the left side
+        // (nums[left - 1] is the value from the triplet just pushed)
+        while (left < right && nums[left] === nums[left - 1]) left++;
+        // Skip duplicates of the value we just used on the right side
+        // (nums[right + 1] is the value from the triplet just pushed)
+        while (left < right && nums[right] === nums[right + 1]) right--;
       }
     }
   }
 
-  return results;
+  return res;
 };
