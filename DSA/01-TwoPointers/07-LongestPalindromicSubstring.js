@@ -64,3 +64,38 @@ var longestPalindrome = function (s) {
 
   return s.slice(start, start + maxLen);
 };
+
+/**
+ * @param {string} s
+ * @return {string}
+ */
+var longestPalindrome2 = function (s) {
+  if (s.length < 2) return s;
+
+  let start = 0;
+  let maxLen = 1;
+
+  const expand = (left, right) => {
+    while (left >= 0 && right < s.length && s[left] === s[right]) {
+      left--;
+      right++;
+    }
+    // loop exits one step past the last match, so left/right overshot by 1 on each side
+    // the actual palindrome bounds are (left + 1) to (right - 1)
+
+    const len = right - left - 1;
+    // length = (right - 1) - (left + 1) + 1, simplified to right - left - 1
+
+    if (len > maxLen) {
+      maxLen = len;
+      start = left + 1; // shift back to the real left boundary of the palindrome
+    }
+  };
+
+  for (let i = 0; i < s.length; i++) {
+    expand(i, i); // odd length, center is a single char
+    expand(i, i + 1); // even length, center is between two chars
+  }
+
+  return s.substring(start, start + maxLen);
+};
