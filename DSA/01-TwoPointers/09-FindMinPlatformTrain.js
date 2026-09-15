@@ -1,3 +1,4 @@
+// https://www.geeksforgeeks.org/problems/minimum-platforms-1587115620/1
 // Given arrival[] and departure[] times of N trains, find minimum platforms needed so no train waits.
 
 // Intuition:
